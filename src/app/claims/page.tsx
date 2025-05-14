@@ -1,47 +1,40 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Download, Filter } from "lucide-react"
+import { Download, Filter, Plus } from "lucide-react"
 import { Navbar } from "@/components/ui/navbar"
 import { Footer } from "@/components/ui/footer"
+import { supabaseClient } from "@/lib/supabaseClient"
+import type { Claim } from "@/lib/supabase-types"
+import { formatDate, getStatusColor } from "@/lib/utils"
 
 export default function ClaimsPage() {
-  // Sample claims data
-  const claims = [
-    {
-      id: "CLM-1234",
-      customer: "John Smith",
-      date: "2025-05-10",
-      amount: "$2,450.00",
-      status: "Approved",
-    },
-    {
-      id: "CLM-1235",
-      customer: "Sarah Johnson",
-      date: "2025-05-09",
-      amount: "$1,200.00",
-      status: "Pending",
-    },
-    {
-      id: "CLM-1236",
-      customer: "Michael Brown",
-      date: "2025-05-08",
-      amount: "$3,800.00",
-      status: "Under Review",
-    },
-    {
-      id: "CLM-1237",
-      customer: "Emily Davis",
-      date: "2025-05-07",
-      amount: "$950.00",
-      status: "Approved",
-    },
-    {
-      id: "CLM-1238",
-      customer: "Robert Wilson",
-      date: "2025-05-06",
-      amount: "$5,200.00",
-      status: "Rejected",
-    },
-  ]
+  const [claims, setClaims] = useState<Claim[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchClaims() {
+      try {
+        const { data, error } = await supabaseClient
+          .from("claims")
+          .select("*")
+          .order("created_at", { ascending: false })
+
+        if (error) {
+          throw error
+        }
+
+        setClaims(data || [])
+      } catch (error) {
+        console.error("Error fetching claims:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchClaims()
+  }, [])
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -63,7 +56,12 @@ export default function ClaimsPage() {
               <Download className="mr-2 h-4 w-4" />
               Export
             </button>
-            <button className="btn btn-primary">New Claim</button>
+            <Link href="/submit-claim">
+              <button className="btn btn-primary flex items-center">
+                <Plus className="mr-2 h-4 w-4" />
+                New Claim
+              </button>
+            </Link>
           </div>
         </div>
 
@@ -71,23 +69,33 @@ export default function ClaimsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="card p-4">
             <div className="text-sm font-medium mb-2">Total Claims</div>
-            <div className="text-2xl font-bold">128</div>
-            <p className="text-xs text-gray-500">+12% from last month</p>
+            <div className="text-2xl font-bold">{claims.length}</div>
+            <p className="text-xs text-gray-500">All submitted claims</p>
           </div>
           <div className="card p-4">
             <div className="text-sm font-medium mb-2">Approved</div>
-            <div className="text-2xl font-bold">86</div>
-            <p className="text-xs text-green-500">67% approval rate</p>
+            <div className="text-2xl font-bold">{claims.filter((claim) => claim.status === "approved").length}</div>
+            <p className="text-xs text-green-500">
+              {claims.length > 0
+                ? `${Math.round((claims.filter((claim) => claim.status === "approved").length / claims.length) * 100)}% approval rate`
+                : "No claims yet"}
+            </p>
           </div>
           <div className="card p-4">
             <div className="text-sm font-medium mb-2">Pending</div>
-            <div className="text-2xl font-bold">32</div>
-            <p className="text-xs text-gray-500">Average 2.4 days to process</p>
+            <div className="text-2xl font-bold">
+              {claims.filter((claim) => claim.status === "submitted" || claim.status === "analyzed").length}
+            </div>
+            <p className="text-xs text-gray-500">Awaiting review</p>
           </div>
           <div className="card p-4">
             <div className="text-sm font-medium mb-2">Rejected</div>
-            <div className="text-2xl font-bold">10</div>
-            <p className="text-xs text-red-500">7.8% rejection rate</p>
+            <div className="text-2xl font-bold">{claims.filter((claim) => claim.status === "rejected").length}</div>
+            <p className="text-xs text-red-500">
+              {claims.length > 0
+                ? `${Math.round((claims.filter((claim) => claim.status === "rejected").length / claims.length) * 100)}% rejection rate`
+                : "No claims yet"}
+            </p>
           </div>
         </div>
 
@@ -98,53 +106,60 @@ export default function ClaimsPage() {
             <p className="text-sm text-gray-500">A list of recent claims submitted to the system</p>
           </div>
           <div className="p-4">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2 font-medium text-gray-500">Claim ID</th>
-                    <th className="text-left p-2 font-medium text-gray-500">Customer</th>
-                    <th className="text-left p-2 font-medium text-gray-500">Date</th>
-                    <th className="text-left p-2 font-medium text-gray-500">Amount</th>
-                    <th className="text-left p-2 font-medium text-gray-500">Status</th>
-                    <th className="text-right p-2 font-medium text-gray-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {claims.map((claim) => (
-                    <tr key={claim.id} className="border-b">
-                      <td className="p-2 font-medium">{claim.id}</td>
-                      <td className="p-2">{claim.customer}</td>
-                      <td className="p-2">{claim.date}</td>
-                      <td className="p-2">{claim.amount}</td>
-                      <td className="p-2">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                            claim.status === "Approved"
-                              ? "bg-green-100 text-green-800"
-                              : claim.status === "Rejected"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {claim.status}
-                        </span>
-                      </td>
-                      <td className="p-2 text-right">
-                        <Link href={`/claims/${claim.id}`}>
-                          <button className="btn btn-outline">View</button>
-                        </Link>
-                      </td>
+            {loading ? (
+              <div className="text-center py-8">Loading claims...</div>
+            ) : claims.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">No claims have been submitted yet.</p>
+                <Link href="/submit-claim">
+                  <button className="btn btn-primary">Submit Your First Claim</button>
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-2 font-medium text-gray-500">Claim ID</th>
+                      <th className="text-left p-2 font-medium text-gray-500">Name</th>
+                      <th className="text-left p-2 font-medium text-gray-500">Date</th>
+                      <th className="text-left p-2 font-medium text-gray-500">Status</th>
+                      <th className="text-left p-2 font-medium text-gray-500">Score</th>
+                      <th className="text-right p-2 font-medium text-gray-500">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {claims.map((claim) => (
+                      <tr key={claim.id} className="border-b hover:bg-gray-50">
+                        <td className="p-2 font-medium">CLM-{claim.id}</td>
+                        <td className="p-2">{claim.name}</td>
+                        <td className="p-2">{formatDate(claim.created_at)}</td>
+                        <td className="p-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusColor(claim.status)}`}
+                          >
+                            {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="p-2">{claim.claim_score ? claim.claim_score.toFixed(2) : "N/A"}</td>
+                        <td className="p-2 text-right">
+                          <Link href={`/claims/${claim.id}`}>
+                            <button className="btn btn-outline">View</button>
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          {claims.length > 0 && (
+            <div className="p-4 border-t flex justify-between">
+              <button className="btn btn-outline">Previous</button>
+              <button className="btn btn-outline">Next</button>
             </div>
-          </div>
-          <div className="p-4 border-t flex justify-between">
-            <button className="btn btn-outline">Previous</button>
-            <button className="btn btn-outline">Next</button>
-          </div>
+          )}
         </div>
       </div>
 
