@@ -1,11 +1,38 @@
+"use client"
+
 import { FileText, AlertCircle, CheckCircle, Clock, TrendingUp, Users, DollarSign } from "lucide-react"
 import { Navbar } from "@/components/ui/navbar"
 import { Footer } from "@/components/ui/footer"
+import {Canvas} from "@react-three/fiber"
+import { useGLTF, Stage, PresentationControls } from "@react-three/drei"
+import { PrimitiveProps } from '@react-three/fiber'
+import { ComponentProps } from 'react'
+import { useMemo } from 'react'
+
 
 export default function DashboardPage() {
+
+
+  function Model(props: PrimitiveProps){
+    const {scene} = useGLTF("/bmw.glb");
+    return <primitive object={scene} {...props}/>
+  }
+
+
+
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar activePage="dashboard" />
+
+      <Canvas dpr = {[1,2]} shadows camera = {{fov:45}} style = {{"position": "absolute", width : "500px", height: "500px"}}>
+        <color attach="background" args={["#101010"]}></color>
+        <PresentationControls speed = {1.5} global zoom = {.9} polar={[-0.1, Math.PI / 4]}>
+          <Stage environment={"night"}>
+            <Model scale = {0.01}></Model>
+          </Stage>
+        </PresentationControls>
+      </Canvas>
 
       {/* Dashboard Content */}
       <div className="flex-1 container mx-auto px-4 py-6 md:px-6 md:py-12">
