@@ -1,18 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
+import { Canvas } from "@react-three/fiber"
+import { useGLTF, Stage, PresentationControls, OrbitControls } from "@react-three/drei"
+import type { PrimitiveProps } from "@react-three/fiber"
 import { Navbar } from "@/components/ui/navbar"
 import { Footer } from "@/components/ui/footer"
 import { supabaseClient } from "@/lib/supabaseClient"
 import type { Claim, Document, Image, Video } from "@/lib/supabase-types"
-import { formatDate, getStatusColor, getSeverityColor } from "@/lib/utils"
+import { formatDate, getStatusColor } from "@/lib/utils"
 import {
   ArrowLeft,
   FileText,
   ImageIcon,
-  VideoIcon,
   CheckCircle,
   AlertCircle,
   ThumbsUp,
@@ -21,7 +23,17 @@ import {
   FileCheck,
   Lightbulb,
   Layers,
+  Car,
+  CheckSquare,
+  Info,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
+
+function Model(props: PrimitiveProps) {
+  const { scene } = useGLTF("/bmw.glb")
+  return <primitive object={scene} {...props} />
+}
 
 export default function ClaimAnalyzePage() {
   const params = useParams()
@@ -38,6 +50,91 @@ export default function ClaimAnalyzePage() {
   const [activeSection, setActiveSection] = useState("summary")
   const [analysisInProgress, setAnalysisInProgress] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
+
+  // Expanded sections state
+  const [expandedSections, setExpandedSections] = useState({
+    model: true,
+    documents: true,
+    carIdentification: true,
+    damageAssessment: true,
+    recommendation: true,
+  })
+
+  // Hardcoded analysis data
+  const analysisData = {
+    documentVerification: {
+      score: 8.5,
+      carModel: {
+        policyForm: "BMW X5",
+        carGrant: "BMW X5",
+        policeReport: "BMW X5",
+        match: true,
+      },
+      ownerName: {
+        policyForm: "John Smith",
+        carGrant: "John Smith",
+        policeReport: "John Smith",
+        match: true,
+      },
+      policyMaturity: {
+        date: "2025-12-31",
+        isValid: true,
+      },
+      incidentDate: {
+        policyForm: "2023-05-15",
+        policeReport: "2023-05-15",
+        match: true,
+      },
+    },
+    carModelIdentification: {
+      score: 9.2,
+      claimedModel: "BMW X5",
+      detectedModel: "BMW X5",
+      confidence: 0.94,
+      match: true,
+    },
+    damageAssessment: {
+      score: 7.8,
+      parts: [
+        {
+          name: "Front Bumper",
+          claimedSeverity: "severe",
+          assessedSeverity: "severe",
+          match: true,
+          confidence: 0.92,
+        },
+        {
+          name: "Hood",
+          claimedSeverity: "moderate",
+          assessedSeverity: "moderate",
+          match: true,
+          confidence: 0.88,
+        },
+        {
+          name: "Left Headlight",
+          claimedSeverity: "severe",
+          assessedSeverity: "moderate",
+          match: false,
+          confidence: 0.85,
+        },
+        {
+          name: "Front Left Fender",
+          claimedSeverity: "moderate",
+          assessedSeverity: "minor",
+          match: false,
+          confidence: 0.79,
+        },
+      ],
+    },
+    overallScore: 8.4,
+    keyFindings: [
+      "All documents are consistent and verified",
+      "Car model in images matches the claimed model",
+      "Some damage severity assessments differ from claimed severity",
+      "Overall damage is consistent with a frontal collision",
+    ],
+    recommendation: "Approve with adjusted payout for overestimated damage",
+  }
 
   useEffect(() => {
     async function fetchClaimData() {
@@ -139,7 +236,7 @@ export default function ClaimAnalyzePage() {
       await new Promise((resolve) => setTimeout(resolve, 3000))
 
       // Update claim score (simulated)
-      const claimScore = Math.round(Math.random() * 100) / 10
+      const claimScore = analysisData.overallScore
 
       const { error } = await supabaseClient
         .from("claims")
@@ -179,6 +276,13 @@ export default function ClaimAnalyzePage() {
 
   const canApproveOrReject = () => {
     return claim && (claim.status === "submitted" || claim.status === "analyzed")
+  }
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections({
+      ...expandedSections,
+      [section]: !expandedSections[section],
+    })
   }
 
   if (loading) {
@@ -286,53 +390,49 @@ export default function ClaimAnalyzePage() {
           </div>
         )}
 
-        {/* Analysis Navigation */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        {/* Main Content with Sidebar */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Sidebar */}
           <div className="md:col-span-1">
             <div className="bg-gray-50 rounded-lg p-4 sticky top-4">
               <h3 className="font-bold text-lg mb-4">Analysis Tools</h3>
               <nav className="space-y-1">
                 <button
                   onClick={() => setActiveSection("summary")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "summary" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "summary" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <BarChart className="h-4 w-4 mr-2" />
                   Summary
                 </button>
                 <button
                   onClick={() => setActiveSection("documents")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "documents" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "documents" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <FileCheck className="h-4 w-4 mr-2" />
                   Document Verification
                 </button>
                 <button
+                  onClick={() => setActiveSection("car-model")}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "car-model" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
+                >
+                  <Car className="h-4 w-4 mr-2" />
+                  Car Model Identification
+                </button>
+                <button
                   onClick={() => setActiveSection("damage")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "damage" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "damage" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Damage Assessment
                 </button>
                 <button
-                  onClick={() => setActiveSection("models")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "models" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
-                >
-                  <Layers className="h-4 w-4 mr-2" />
-                  3D Models
-                </button>
-                <button
                   onClick={() => setActiveSection("recommendation")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "recommendation" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "recommendation" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <Lightbulb className="h-4 w-4 mr-2" />
                   Recommendation
@@ -364,490 +464,1021 @@ export default function ClaimAnalyzePage() {
             </div>
           </div>
 
+          {/* Main Content Area */}
           <div className="md:col-span-3">
-            {/* Summary Section */}
             {activeSection === "summary" && (
-              <div className="space-y-6">
-                <div className="card p-6">
-                  <h2 className="text-xl font-bold mb-4">Claim Analysis Summary</h2>
+              <div className="space-y-8">
+                {/* 1. 3D Model Section */}
+                <div className="card">
+                  <div
+                    className="p-4 border-b flex justify-between items-center cursor-pointer"
+                    onClick={() => toggleSection("model")}
+                  >
+                    <h2 className="text-xl font-bold">3D Model Analysis</h2>
+                    {expandedSections.model ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </div>
 
-                  {claim.status !== "analyzed" && !analysisComplete ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500 mb-4">
-                        This claim has not been analyzed yet. Run the analysis to get insights.
-                      </p>
-                      {!analysisInProgress && (
-                        <button onClick={runAnalysis} className="btn btn-primary">
-                          Run Analysis Now
-                        </button>
-                      )}
-                      {analysisInProgress && (
-                        <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-black mr-3"></div>
-                          <span>Analysis in progress...</span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  {expandedSections.model && (
+                    <div className="p-4">
+                      <div className="bg-gray-50 rounded-lg h-[400px] mb-4">
+                        <Canvas>
+                          <Suspense fallback={null}>
+                            <PresentationControls
+                              global
+                              zoom={0.8}
+                              rotation={[0, -Math.PI / 4, 0]}
+                              polar={[-0.1, Math.PI / 4]}
+                              azimuth={[-Math.PI / 4, Math.PI / 4]}
+                            >
+                              <Stage environment="city" intensity={0.6}>
+                                <Model scale={0.01} />
+                              </Stage>
+                            </PresentationControls>
+                            <OrbitControls
+                              enableZoom={true}
+                              maxPolarAngle={Math.PI / 2.2} // prevents looking too far down
+                              minPolarAngle={0}
+                            />
+
+                          </Suspense>
+                        </Canvas>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-gray-50 p-4 rounded-md">
-                          <p className="text-sm text-gray-500">Overall Claim Score</p>
-                          <p className="text-3xl font-bold">{claim.claim_score?.toFixed(1) || "N/A"}</p>
-                          <div className="mt-2">
-                            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                              <div
-                                className={`h-2.5 rounded-full ${
-                                  (claim.claim_score || 0) > 7
-                                    ? "bg-green-500"
-                                    : (claim.claim_score || 0) > 4
-                                      ? "bg-yellow-500"
-                                      : "bg-red-500"
-                                }`}
-                                style={{ width: `${(claim.claim_score || 0) * 10}%` }}
-                              ></div>
-                            </div>
+                          <p className="text-sm text-gray-500">Model Accuracy</p>
+                          <p className="text-3xl font-bold">92%</p>
+                          <p className="text-xs text-gray-500 mt-1">Based on video evidence</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-md">
+                          <p className="text-sm text-gray-500">Damage Points</p>
+                          <p className="text-3xl font-bold">4</p>
+                          <p className="text-xs text-gray-500 mt-1">Identified on 3D model</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-md">
+                          <p className="text-sm text-gray-500">Collision Type</p>
+                          <p className="text-3xl font-bold">Frontal</p>
+                          <p className="text-xs text-gray-500 mt-1">45° angle from left</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Document Verification Section */}
+                <div className="card">
+                  <div
+                    className="p-4 border-b flex justify-between items-center cursor-pointer"
+                    onClick={() => toggleSection("documents")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold">Document Verification</h2>
+                      <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        Score: {analysisData.documentVerification.score.toFixed(1)}/10
+                      </span>
+                    </div>
+                    {expandedSections.documents ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
+                    )}
+                  </div>
+
+                  {expandedSections.documents && (
+                    <div className="p-4">
+                      <div className="mb-6">
+                        <h3 className="font-bold text-lg mb-3">Information Consistency Check</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="bg-gray-50">
+                                <th className="border p-2 text-left">Information</th>
+                                <th className="border p-2 text-left">Policy Form</th>
+                                <th className="border p-2 text-left">Car Grant</th>
+                                <th className="border p-2 text-left">Police Report</th>
+                                <th className="border p-2 text-left">Match</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className="border p-2 font-medium">Car Model</td>
+                                <td className="border p-2">{analysisData.documentVerification.carModel.policyForm}</td>
+                                <td className="border p-2">{analysisData.documentVerification.carModel.carGrant}</td>
+                                <td className="border p-2">
+                                  {analysisData.documentVerification.carModel.policeReport}
+                                </td>
+                                <td className="border p-2">
+                                  {analysisData.documentVerification.carModel.match ? (
+                                    <CheckCircle className="h-5 w-5 text-green-500" />
+                                  ) : (
+                                    <AlertCircle className="h-5 w-5 text-red-500" />
+                                  )}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="border p-2 font-medium">Owner Name</td>
+                                <td className="border p-2">{analysisData.documentVerification.ownerName.policyForm}</td>
+                                <td className="border p-2">{analysisData.documentVerification.ownerName.carGrant}</td>
+                                <td className="border p-2">
+                                  {analysisData.documentVerification.ownerName.policeReport}
+                                </td>
+                                <td className="border p-2">
+                                  {analysisData.documentVerification.ownerName.match ? (
+                                    <CheckCircle className="h-5 w-5 text-green-500" />
+                                  ) : (
+                                    <AlertCircle className="h-5 w-5 text-red-500" />
+                                  )}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="border p-2 font-medium">Incident Date</td>
+                                <td className="border p-2">
+                                  {analysisData.documentVerification.incidentDate.policyForm}
+                                </td>
+                                <td className="border p-2">-</td>
+                                <td className="border p-2">
+                                  {analysisData.documentVerification.incidentDate.policeReport}
+                                </td>
+                                <td className="border p-2">
+                                  {analysisData.documentVerification.incidentDate.match ? (
+                                    <CheckCircle className="h-5 w-5 text-green-500" />
+                                  ) : (
+                                    <AlertCircle className="h-5 w-5 text-red-500" />
+                                  )}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-gray-50 p-4 rounded-md">
+                          <h3 className="font-bold mb-2">Policy Validity Check</h3>
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className="text-sm font-medium">Policy Maturity Date:</p>
+                            <p>{analysisData.documentVerification.policyMaturity.date}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">Status:</p>
+                            {analysisData.documentVerification.policyMaturity.isValid ? (
+                              <span className="text-green-600 flex items-center">
+                                <CheckCircle className="h-4 w-4 mr-1" /> Valid
+                              </span>
+                            ) : (
+                              <span className="text-red-600 flex items-center">
+                                <AlertCircle className="h-4 w-4 mr-1" /> Expired
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         <div className="bg-gray-50 p-4 rounded-md">
-                          <p className="text-sm text-gray-500">Document Verification</p>
-                          <p className="text-3xl font-bold">
-                            {documents.filter((d) => d.verified).length}/{documents.length}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-2">
-                            {documents.filter((d) => d.verified).length === documents.length
-                              ? "All documents verified"
-                              : "Some documents need verification"}
-                          </p>
-                        </div>
-
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <p className="text-sm text-gray-500">Damage Assessment</p>
-                          <p className="text-3xl font-bold">
-                            {images.filter((i) => i.damage_score !== null).length}/{images.length}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-2">
-                            {images.filter((i) => i.damage_score !== null).length === images.length
-                              ? "All images assessed"
-                              : "Some images need assessment"}
-                          </p>
+                          <h3 className="font-bold mb-2">Document Authenticity</h3>
+                          <div className="space-y-2">
+                            {documents.map((doc, index) => (
+                              <div key={index} className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4 text-blue-500" />
+                                  <span>
+                                    {doc.doc_type
+                                      .split("_")
+                                      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                                      .join(" ")}
+                                  </span>
+                                </div>
+                                <span className="text-green-600 flex items-center">
+                                  <CheckCircle className="h-4 w-4 mr-1" /> Authentic
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        <h3 className="font-bold">Analysis Results</h3>
-                        <p className="text-gray-700">
-                          Based on our automated analysis, this claim has received a score of{" "}
-                          <strong>{claim.claim_score?.toFixed(1) || "N/A"}</strong> out of 10.
+                      <div className="mt-6 p-4 bg-blue-50 rounded-md border border-blue-200">
+                        <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                          <Info className="h-4 w-4 mr-2" />
+                          Document Verification Summary
+                        </h3>
+                        <p className="text-blue-800">
+                          All documents are consistent and authentic. The car model, owner information, and incident
+                          dates match across all submitted documents. The insurance policy is valid and covers the
+                          incident date.
                         </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <h4 className="font-bold mb-2">Key Findings</h4>
-                          <ul className="list-disc pl-5 space-y-1">
-                            <li>
-                              {documents.filter((d) => d.verified).length} out of {documents.length} documents have been
-                              verified
-                            </li>
-                            <li>{images.filter((i) => i.severity === "severe").length} images show severe damage</li>
-                            <li>
-                              {images.filter((i) => i.severity === "moderate").length} images show moderate damage
-                            </li>
-                            <li>{images.filter((i) => i.severity === "minor").length} images show minor damage</li>
-                            <li>
-                              {videos.filter((v) => v.model_status === "done").length} out of {videos.length} videos
-                              have been processed
-                            </li>
-                          </ul>
+                {/* 3. Car Model Identification Section */}
+                <div className="card">
+                  <div
+                    className="p-4 border-b flex justify-between items-center cursor-pointer"
+                    onClick={() => toggleSection("carIdentification")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold">Car Model Identification</h2>
+                      <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        Score: {analysisData.carModelIdentification.score.toFixed(1)}/10
+                      </span>
+                    </div>
+                    {expandedSections.carIdentification ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
+                    )}
+                  </div>
+
+                  {expandedSections.carIdentification && (
+                    <div className="p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                          <h3 className="font-bold mb-3">Model Comparison</h3>
+                          <div className="bg-gray-50 p-4 rounded-md">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-500 mb-1">Claimed Model</p>
+                                <p className="font-bold text-lg">{analysisData.carModelIdentification.claimedModel}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-500 mb-1">Detected Model</p>
+                                <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-500 mb-1">Confidence</p>
+                                <p className="font-bold text-lg">
+                                  {(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-500 mb-1">Match</p>
+                                {analysisData.carModelIdentification.match ? (
+                                  <span className="text-green-600 flex items-center">
+                                    <CheckCircle className="h-4 w-4 mr-1" /> Verified
+                                  </span>
+                                ) : (
+                                  <span className="text-red-600 flex items-center">
+                                    <AlertCircle className="h-4 w-4 mr-1" /> Mismatch
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                          <h4 className="font-bold text-blue-800 mb-2 flex items-center">
-                            <Lightbulb className="h-4 w-4 mr-2" />
-                            Recommendation
-                          </h4>
-                          <p className="text-blue-800">
-                            {(claim.claim_score || 0) > 7
-                              ? "This claim appears to be valid with sufficient documentation and evidence. Recommend approval."
-                              : (claim.claim_score || 0) > 4
-                                ? "This claim has some inconsistencies but appears generally valid. Further review recommended."
-                                : "This claim has significant issues with documentation or evidence. Recommend rejection or requesting additional information."}
+                        <div>
+                          <h3 className="font-bold mb-3">Image Analysis</h3>
+                          <div className="grid grid-cols-2 gap-2">
+                            {images.slice(0, 4).map((img, index) => (
+                              <div key={index} className="border rounded-md overflow-hidden">
+                                <img
+                                  src={img.file_url || "/placeholder.svg"}
+                                  alt={`Car image ${index + 1}`}
+                                  className="w-full h-32 object-cover"
+                                />
+                                <div className="p-2 bg-gray-50">
+                                  <p className="text-xs text-center">
+                                    {index === 0
+                                      ? "Front View"
+                                      : index === 1
+                                        ? "Side View"
+                                        : index === 2
+                                          ? "Rear View"
+                                          : "Interior"}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-md mb-4">
+                        <h3 className="font-bold mb-2">Key Features Identified</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="flex flex-col items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                              <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "95%" }}></div>
+                            </div>
+                            <p className="text-xs text-center">Body Shape</p>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                              <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "92%" }}></div>
+                            </div>
+                            <p className="text-xs text-center">Headlights</p>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                              <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "97%" }}></div>
+                            </div>
+                            <p className="text-xs text-center">Grille</p>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                              <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "90%" }}></div>
+                            </div>
+                            <p className="text-xs text-center">Wheels</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                        <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                          <Info className="h-4 w-4 mr-2" />
+                          Car Model Identification Summary
+                        </h3>
+                        <p className="text-blue-800">
+                          The car model in the images has been identified as a BMW X5 with 94% confidence, which matches
+                          the claimed model in the documents. All key features of the BMW X5 have been identified in the
+                          images.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Damage Assessment Section */}
+                <div className="card">
+                  <div
+                    className="p-4 border-b flex justify-between items-center cursor-pointer"
+                    onClick={() => toggleSection("damageAssessment")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold">Damage Assessment</h2>
+                      <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        Score: {analysisData.damageAssessment.score.toFixed(1)}/10
+                      </span>
+                    </div>
+                    {expandedSections.damageAssessment ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
+                    )}
+                  </div>
+
+                  {expandedSections.damageAssessment && (
+                    <div className="p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        {analysisData.damageAssessment.parts.map((part, index) => (
+                          <div key={index} className="border rounded-md overflow-hidden">
+                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
+                              <h3 className="font-bold">{part.name}</h3>
+                              {part.match ? (
+                                <span className="text-green-600 flex items-center text-sm">
+                                  <CheckCircle className="h-4 w-4 mr-1" /> Verified
+                                </span>
+                              ) : (
+                                <span className="text-amber-600 flex items-center text-sm">
+                                  <AlertCircle className="h-4 w-4 mr-1" /> Discrepancy
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2">
+                              <div className="aspect-square relative">
+                                <img
+                                  src={images[index]?.file_url || "/placeholder.svg"}
+                                  alt={`Damage to ${part.name}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-1 text-xs text-center">
+                                  {part.name}
+                                </div>
+                              </div>
+                              <div className="p-3">
+                                <div className="mb-3">
+                                  <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
+                                        ? "bg-red-100 text-red-800"
+                                        : part.claimedSeverity === "moderate"
+                                          ? "bg-amber-100 text-amber-800"
+                                          : "bg-yellow-100 text-yellow-800"
+                                      }`}
+                                  >
+                                    {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
+                                  </span>
+                                </div>
+                                <div className="mb-3">
+                                  <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
+                                        ? "bg-red-100 text-red-800"
+                                        : part.assessedSeverity === "moderate"
+                                          ? "bg-amber-100 text-amber-800"
+                                          : "bg-yellow-100 text-yellow-800"
+                                      }`}
+                                  >
+                                    {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-500 mb-1">Confidence</p>
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1">
+                                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                        <div
+                                          className="bg-blue-600 h-1.5 rounded-full"
+                                          style={{ width: `${part.confidence * 100}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                    <span className="text-xs font-medium">{(part.confidence * 100).toFixed(0)}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                        <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                          <Info className="h-4 w-4 mr-2" />
+                          Damage Assessment Summary
+                        </h3>
+                        <p className="text-blue-800">
+                          The damage assessment shows that 2 out of 4 parts have severity levels that match the claimed
+                          severity. The front bumper and hood damage are accurately reported, while the left headlight
+                          and front left fender damage appear to be less severe than claimed. Overall, the damage is
+                          consistent with a frontal collision.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Overall Score and Recommendation Section */}
+                <div className="card">
+                  <div
+                    className="p-4 border-b flex justify-between items-center cursor-pointer"
+                    onClick={() => toggleSection("recommendation")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold">Overall Score & Recommendation</h2>
+                      <span className="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        Score: {analysisData.overallScore.toFixed(1)}/10
+                      </span>
+                    </div>
+                    {expandedSections.recommendation ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
+                    )}
+                  </div>
+
+                  {expandedSections.recommendation && (
+                    <div className="p-4">
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center">
+                          <span className="text-3xl font-bold text-green-700">
+                            {analysisData.overallScore.toFixed(1)}
+                          </span>
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold mb-1">Claim Assessment Score</h3>
+                          <p className="text-gray-600">
+                            This claim has received a score of {analysisData.overallScore.toFixed(1)} out of 10,
+                            indicating a high likelihood of validity.
                           </p>
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-sm text-gray-500 mb-1">Document Verification</p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-lg">{analysisData.documentVerification.score.toFixed(1)}</p>
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                              <FileCheck className="h-6 w-6 text-blue-600" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-sm text-gray-500 mb-1">Car Model Identification</p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-lg">{analysisData.carModelIdentification.score.toFixed(1)}</p>
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                              <Car className="h-6 w-6 text-blue-600" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-sm text-gray-500 mb-1">Damage Assessment</p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-lg">{analysisData.damageAssessment.score.toFixed(1)}</p>
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                              <ImageIcon className="h-6 w-6 text-blue-600" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-sm text-gray-500 mb-1">3D Model Analysis</p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-lg">8.5</p>
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                              <Layers className="h-6 w-6 text-blue-600" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mb-6">
+                        <h3 className="font-bold text-lg mb-3">Key Findings</h3>
+                        <ul className="space-y-2">
+                          {analysisData.keyFindings.map((finding, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <CheckSquare className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                              <span>{finding}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="p-6 bg-green-50 rounded-md border border-green-200 mb-6">
+                        <h3 className="text-xl font-bold text-green-800 mb-3 flex items-center">
+                          <Lightbulb className="h-6 w-6 mr-2" />
+                          Recommendation
+                        </h3>
+                        <p className="text-green-800 text-lg mb-4">{analysisData.recommendation}</p>
+                        <p className="text-green-700">
+                          This claim appears to be valid with consistent documentation and evidence. The car model has
+                          been verified, and the damage is consistent with the reported incident. However, some damage
+                          severity levels appear to be overestimated. We recommend approving the claim with an adjusted
+                          payout that reflects the actual damage severity.
+                        </p>
+                      </div>
+
+                      {canApproveOrReject() && (
+                        <div className="flex gap-3 justify-center">
+                          <button
+                            onClick={() => updateClaimStatus("approved")}
+                            disabled={isUpdating}
+                            className="btn flex items-center bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <ThumbsUp className="mr-2 h-4 w-4" />
+                            Approve Claim
+                          </button>
+                          <button
+                            onClick={() => updateClaimStatus("rejected")}
+                            disabled={isUpdating}
+                            className="btn flex items-center bg-red-600 hover:bg-red-700 text-white"
+                          >
+                            <ThumbsDown className="mr-2 h-4 w-4" />
+                            Reject Claim
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Documents Section */}
+            {/* Document Verification Tab */}
             {activeSection === "documents" && (
               <div className="card p-6">
-                <h2 className="text-xl font-bold mb-4">Document Verification</h2>
+                <div className="flex items-center gap-2 mb-6">
+                  <h2 className="text-xl font-bold">Document Verification</h2>
+                  <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    Score: {analysisData.documentVerification.score.toFixed(1)}/10
+                  </span>
+                </div>
 
-                {documents.length === 0 ? (
-                  <p className="text-gray-500 text-center py-6">No documents attached to this claim.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {documents.map((doc) => (
-                      <div key={doc.id} className="border rounded-md p-4">
-                        <div className="flex items-start gap-4">
-                          <FileText className="h-10 w-10 text-blue-500 flex-shrink-0" />
-                          <div className="flex-1">
-                            <div className="flex justify-between">
-                              <h3 className="font-bold">
-                                {doc.doc_type
-                                  .split("_")
-                                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                                  .join(" ")}
-                              </h3>
-                              <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                  doc.verified ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                                }`}
-                              >
-                                {doc.verified ? "Verified" : "Pending Verification"}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-500 truncate">{doc.file_url.split("/").pop()}</p>
-
-                            {doc.extracted_text && (
-                              <div className="mt-2 p-3 bg-gray-50 rounded text-sm">
-                                <p className="font-medium mb-1">Extracted Text:</p>
-                                <p className="text-gray-700">{doc.extracted_text}</p>
-                              </div>
+                <div className="mb-6">
+                  <h3 className="font-bold text-lg mb-3">Information Consistency Check</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border p-2 text-left">Information</th>
+                          <th className="border p-2 text-left">Policy Form</th>
+                          <th className="border p-2 text-left">Car Grant</th>
+                          <th className="border p-2 text-left">Police Report</th>
+                          <th className="border p-2 text-left">Match</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="border p-2 font-medium">Car Model</td>
+                          <td className="border p-2">{analysisData.documentVerification.carModel.policyForm}</td>
+                          <td className="border p-2">{analysisData.documentVerification.carModel.carGrant}</td>
+                          <td className="border p-2">{analysisData.documentVerification.carModel.policeReport}</td>
+                          <td className="border p-2">
+                            {analysisData.documentVerification.carModel.match ? (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            ) : (
+                              <AlertCircle className="h-5 w-5 text-red-500" />
                             )}
-
-                            <div className="mt-4 flex justify-between">
-                              <a
-                                href={doc.file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline text-sm flex items-center"
-                              >
-                                View Document
-                              </a>
-
-                              {!doc.verified && (
-                                <button
-                                  className="btn btn-outline text-sm"
-                                  onClick={async () => {
-                                    try {
-                                      await supabaseClient.from("documents").update({ verified: true }).eq("id", doc.id)
-
-                                      // Update local state
-                                      setDocuments(
-                                        documents.map((d) => (d.id === doc.id ? { ...d, verified: true } : d)),
-                                      )
-                                    } catch (error) {
-                                      console.error("Error verifying document:", error)
-                                    }
-                                  }}
-                                >
-                                  Mark as Verified
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="border p-2 font-medium">Owner Name</td>
+                          <td className="border p-2">{analysisData.documentVerification.ownerName.policyForm}</td>
+                          <td className="border p-2">{analysisData.documentVerification.ownerName.carGrant}</td>
+                          <td className="border p-2">{analysisData.documentVerification.ownerName.policeReport}</td>
+                          <td className="border p-2">
+                            {analysisData.documentVerification.ownerName.match ? (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            ) : (
+                              <AlertCircle className="h-5 w-5 text-red-500" />
+                            )}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="border p-2 font-medium">Incident Date</td>
+                          <td className="border p-2">{analysisData.documentVerification.incidentDate.policyForm}</td>
+                          <td className="border p-2">-</td>
+                          <td className="border p-2">{analysisData.documentVerification.incidentDate.policeReport}</td>
+                          <td className="border p-2">
+                            {analysisData.documentVerification.incidentDate.match ? (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            ) : (
+                              <AlertCircle className="h-5 w-5 text-red-500" />
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="bg-gray-50 p-4 rounded-md">
+                    <h3 className="font-bold mb-2">Policy Validity Check</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-sm font-medium">Policy Maturity Date:</p>
+                      <p>{analysisData.documentVerification.policyMaturity.date}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">Status:</p>
+                      {analysisData.documentVerification.policyMaturity.isValid ? (
+                        <span className="text-green-600 flex items-center">
+                          <CheckCircle className="h-4 w-4 mr-1" /> Valid
+                        </span>
+                      ) : (
+                        <span className="text-red-600 flex items-center">
+                          <AlertCircle className="h-4 w-4 mr-1" /> Expired
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-md">
+                    <h3 className="font-bold mb-2">Document Authenticity</h3>
+                    <div className="space-y-2">
+                      {documents.map((doc, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-blue-500" />
+                            <span>
+                              {doc.doc_type
+                                .split("_")
+                                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(" ")}
+                            </span>
+                          </div>
+                          <span className="text-green-600 flex items-center">
+                            <CheckCircle className="h-4 w-4 mr-1" /> Authentic
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                  <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                    <Info className="h-4 w-4 mr-2" />
+                    Document Verification Summary
+                  </h3>
+                  <p className="text-blue-800">
+                    All documents are consistent and authentic. The car model, owner information, and incident dates
+                    match across all submitted documents. The insurance policy is valid and covers the incident date.
+                  </p>
+                </div>
               </div>
             )}
 
-            {/* Damage Assessment Section */}
+            {/* Car Model Identification Tab */}
+            {activeSection === "car-model" && (
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <h2 className="text-xl font-bold">Car Model Identification</h2>
+                  <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    Score: {analysisData.carModelIdentification.score.toFixed(1)}/10
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <h3 className="font-bold mb-3">Model Comparison</h3>
+                    <div className="bg-gray-50 p-4 rounded-md">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500 mb-1">Claimed Model</p>
+                          <p className="font-bold text-lg">{analysisData.carModelIdentification.claimedModel}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500 mb-1">Detected Model</p>
+                          <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500 mb-1">Confidence</p>
+                          <p className="font-bold text-lg">
+                            {(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500 mb-1">Match</p>
+                          {analysisData.carModelIdentification.match ? (
+                            <span className="text-green-600 flex items-center">
+                              <CheckCircle className="h-4 w-4 mr-1" /> Verified
+                            </span>
+                          ) : (
+                            <span className="text-red-600 flex items-center">
+                              <AlertCircle className="h-4 w-4 mr-1" /> Mismatch
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-bold mb-3">Image Analysis</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {images.slice(0, 4).map((img, index) => (
+                        <div key={index} className="border rounded-md overflow-hidden">
+                          <img
+                            src={img.file_url || "/placeholder.svg"}
+                            alt={`Car image ${index + 1}`}
+                            className="w-full h-32 object-cover"
+                          />
+                          <div className="p-2 bg-gray-50">
+                            <p className="text-xs text-center">
+                              {index === 0
+                                ? "Front View"
+                                : index === 1
+                                  ? "Side View"
+                                  : index === 2
+                                    ? "Rear View"
+                                    : "Interior"}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-md mb-4">
+                  <h3 className="font-bold mb-2">Key Features Identified</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "95%" }}></div>
+                      </div>
+                      <p className="text-xs text-center">Body Shape</p>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "92%" }}></div>
+                      </div>
+                      <p className="text-xs text-center">Headlights</p>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "97%" }}></div>
+                      </div>
+                      <p className="text-xs text-center">Grille</p>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: "90%" }}></div>
+                      </div>
+                      <p className="text-xs text-center">Wheels</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                  <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                    <Info className="h-4 w-4 mr-2" />
+                    Car Model Identification Summary
+                  </h3>
+                  <p className="text-blue-800">
+                    The car model in the images has been identified as a BMW X5 with 94% confidence, which matches the
+                    claimed model in the documents. All key features of the BMW X5 have been identified in the images.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Damage Assessment Tab */}
             {activeSection === "damage" && (
               <div className="card p-6">
-                <h2 className="text-xl font-bold mb-4">Damage Assessment</h2>
+                <div className="flex items-center gap-2 mb-6">
+                  <h2 className="text-xl font-bold">Damage Assessment</h2>
+                  <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    Score: {analysisData.damageAssessment.score.toFixed(1)}/10
+                  </span>
+                </div>
 
-                {images.length === 0 ? (
-                  <p className="text-gray-500 text-center py-6">No images attached to this claim.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {images.map((img) => (
-                      <div key={img.id} className="border rounded-md overflow-hidden">
-                        <img
-                          src={img.file_url || "/placeholder.svg"}
-                          alt={`Damage to ${img.part || "vehicle"}`}
-                          className="w-full h-48 object-cover"
-                        />
-                        <div className="p-4">
-                          <div className="flex justify-between items-center mb-2">
-                            <h3 className="font-bold">{img.part || "Vehicle damage"}</h3>
-                            {img.severity && (
-                              <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${getSeverityColor(img.severity)}`}
-                              >
-                                {img.severity.charAt(0).toUpperCase() + img.severity.slice(1)}
-                              </span>
-                            )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  {analysisData.damageAssessment.parts.map((part, index) => (
+                    <div key={index} className="border rounded-md overflow-hidden">
+                      <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
+                        <h3 className="font-bold">{part.name}</h3>
+                        {part.match ? (
+                          <span className="text-green-600 flex items-center text-sm">
+                            <CheckCircle className="h-4 w-4 mr-1" /> Verified
+                          </span>
+                        ) : (
+                          <span className="text-amber-600 flex items-center text-sm">
+                            <AlertCircle className="h-4 w-4 mr-1" /> Discrepancy
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2">
+                        <div className="aspect-square relative">
+                          <img
+                            src={images[index]?.file_url || "/placeholder.svg"}
+                            alt={`Damage to ${part.name}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-1 text-xs text-center">
+                            {part.name}
                           </div>
-
-                          <div className="mt-2">
-                            <p className="text-sm text-gray-500 mb-1">Damage Score:</p>
+                        </div>
+                        <div className="p-3">
+                          <div className="mb-3">
+                            <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
+                                  ? "bg-red-100 text-red-800"
+                                  : part.claimedSeverity === "moderate"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                                }`}
+                            >
+                              {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
+                            </span>
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
+                                  ? "bg-red-100 text-red-800"
+                                  : part.assessedSeverity === "moderate"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                                }`}
+                            >
+                              {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500 mb-1">Confidence</p>
                             <div className="flex items-center gap-2">
                               <div className="flex-1">
-                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                <div className="w-full bg-gray-200 rounded-full h-1.5">
                                   <div
-                                    className={`h-2.5 rounded-full ${
-                                      (img.damage_score || 0) > 7
-                                        ? "bg-red-500"
-                                        : (img.damage_score || 0) > 4
-                                          ? "bg-yellow-500"
-                                          : "bg-green-500"
-                                    }`}
-                                    style={{ width: `${(img.damage_score || 0) * 10}%` }}
+                                    className="bg-blue-600 h-1.5 rounded-full"
+                                    style={{ width: `${part.confidence * 100}%` }}
                                   ></div>
                                 </div>
                               </div>
-                              <span className="font-bold">{img.damage_score?.toFixed(1) || "N/A"}</span>
+                              <span className="text-xs font-medium">{(part.confidence * 100).toFixed(0)}%</span>
                             </div>
-                          </div>
-
-                          {!img.damage_score && !analysisInProgress && !analysisComplete && (
-                            <div className="mt-3">
-                              <button onClick={runAnalysis} className="btn btn-outline text-sm w-full">
-                                Analyze Damage
-                              </button>
-                            </div>
-                          )}
-
-                          {analysisInProgress && !img.damage_score && (
-                            <div className="mt-3 flex justify-center">
-                              <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black"></div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 3D Models Section */}
-            {activeSection === "models" && (
-              <div className="card p-6">
-                <h2 className="text-xl font-bold mb-4">3D Models</h2>
-
-                {videos.length === 0 ? (
-                  <p className="text-gray-500 text-center py-6">No videos attached to this claim.</p>
-                ) : (
-                  <div className="space-y-6">
-                    {videos.map((video) => (
-                      <div key={video.id} className="border rounded-md overflow-hidden">
-                        <div className="grid grid-cols-1 md:grid-cols-2">
-                          <div className="aspect-video bg-gray-100">
-                            <video controls className="w-full h-full" poster="/placeholder.svg?height=200&width=400">
-                              <source src={video.file_url} type="video/mp4" />
-                              Your browser does not support the video tag.
-                            </video>
-                          </div>
-                          <div className="p-4">
-                            <div className="flex justify-between items-center mb-3">
-                              <h3 className="font-bold">Video Evidence</h3>
-                              <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                  video.model_status === "done"
-                                    ? "bg-green-100 text-green-800"
-                                    : video.model_status === "error"
-                                      ? "bg-red-100 text-red-800"
-                                      : "bg-yellow-100 text-yellow-800"
-                                }`}
-                              >
-                                Model: {video.model_status.charAt(0).toUpperCase() + video.model_status.slice(1)}
-                              </span>
-                            </div>
-
-                            {video.model_status === "done" && video.model_file_url && (
-                              <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                                <p className="font-medium mb-2">3D Model Available</p>
-                                <a
-                                  href={video.model_file_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="btn btn-primary text-sm"
-                                >
-                                  View 3D Model
-                                </a>
-                              </div>
-                            )}
-
-                            {video.model_status === "pending" && (
-                              <div className="mt-3 p-3 bg-yellow-50 rounded-md">
-                                <p className="text-yellow-800">
-                                  3D model generation is pending. This process may take some time.
-                                </p>
-                              </div>
-                            )}
-
-                            {video.model_status === "error" && (
-                              <div className="mt-3 p-3 bg-red-50 rounded-md">
-                                <p className="text-red-800">
-                                  There was an error generating the 3D model from this video.
-                                </p>
-                                <button className="btn btn-outline text-sm mt-2">Retry Model Generation</button>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                  <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                    <Info className="h-4 w-4 mr-2" />
+                    Damage Assessment Summary
+                  </h3>
+                  <p className="text-blue-800">
+                    The damage assessment shows that 2 out of 4 parts have severity levels that match the claimed
+                    severity. The front bumper and hood damage are accurately reported, while the left headlight and
+                    front left fender damage appear to be less severe than claimed. Overall, the damage is consistent
+                    with a frontal collision.
+                  </p>
+                </div>
               </div>
             )}
 
-            {/* Recommendation Section */}
+            {/* Recommendation Tab */}
             {activeSection === "recommendation" && (
               <div className="card p-6">
-                <h2 className="text-xl font-bold mb-4">Claim Recommendation</h2>
+                <div className="flex items-center gap-2 mb-6">
+                  <h2 className="text-xl font-bold">Overall Score & Recommendation</h2>
+                  <span className="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    Score: {analysisData.overallScore.toFixed(1)}/10
+                  </span>
+                </div>
 
-                {claim.status !== "analyzed" && !analysisComplete ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">Run the analysis to get a recommendation for this claim.</p>
-                    {!analysisInProgress && (
-                      <button onClick={runAnalysis} className="btn btn-primary">
-                        Run Analysis Now
-                      </button>
-                    )}
-                    {analysisInProgress && (
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-black mr-3"></div>
-                        <span>Analysis in progress...</span>
-                      </div>
-                    )}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center">
+                    <span className="text-3xl font-bold text-green-700">{analysisData.overallScore.toFixed(1)}</span>
                   </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`p-4 rounded-full ${
-                          (claim.claim_score || 0) > 7
-                            ? "bg-green-100"
-                            : (claim.claim_score || 0) > 4
-                              ? "bg-yellow-100"
-                              : "bg-red-100"
-                        }`}
-                      >
-                        {(claim.claim_score || 0) > 7 ? (
-                          <ThumbsUp className="h-8 w-8 text-green-600" />
-                        ) : (claim.claim_score || 0) > 4 ? (
-                          <AlertCircle className="h-8 w-8 text-yellow-600" />
-                        ) : (
-                          <ThumbsDown className="h-8 w-8 text-red-600" />
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg">
-                          {(claim.claim_score || 0) > 7
-                            ? "Recommended for Approval"
-                            : (claim.claim_score || 0) > 4
-                              ? "Further Review Recommended"
-                              : "Recommended for Rejection"}
-                        </h3>
-                        <p className="text-gray-500">
-                          Claim Score: <span className="font-bold">{claim.claim_score?.toFixed(1) || "N/A"}</span>
-                        </p>
+                  <div>
+                    <h3 className="text-xl font-bold mb-1">Claim Assessment Score</h3>
+                    <p className="text-gray-600">
+                      This claim has received a score of {analysisData.overallScore.toFixed(1)} out of 10, indicating a
+                      high likelihood of validity.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <p className="text-sm text-gray-500 mb-1">Document Verification</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-lg">{analysisData.documentVerification.score.toFixed(1)}</p>
+                      <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                        <FileCheck className="h-6 w-6 text-blue-600" />
                       </div>
                     </div>
-
-                    <div className="bg-gray-50 p-4 rounded-md">
-                      <h3 className="font-bold mb-2">Analysis Summary</h3>
-                      <ul className="space-y-2">
-                        <li className="flex items-start gap-2">
-                          <div className="bg-blue-100 p-1 rounded-full mt-0.5">
-                            <FileCheck className="h-4 w-4 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium">Document Verification</p>
-                            <p className="text-sm text-gray-600">
-                              {documents.filter((d) => d.verified).length} out of {documents.length} documents verified
-                              {documents.length > 0 && documents.filter((d) => d.verified).length === documents.length
-                                ? " - All documents appear to be authentic."
-                                : " - Some documents require verification."}
-                            </p>
-                          </div>
-                        </li>
-
-                        <li className="flex items-start gap-2">
-                          <div className="bg-purple-100 p-1 rounded-full mt-0.5">
-                            <ImageIcon className="h-4 w-4 text-purple-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium">Damage Assessment</p>
-                            <p className="text-sm text-gray-600">
-                              {images.filter((i) => i.damage_score !== null).length} out of {images.length} images
-                              assessed
-                              {images.length > 0 &&
-                                ` - Average damage score: ${(
-                                  images.reduce((sum, img) => sum + (img.damage_score || 0), 0) /
-                                    Math.max(images.filter((i) => i.damage_score !== null).length, 1)
-                                ).toFixed(1)}`}
-                            </p>
-                          </div>
-                        </li>
-
-                        <li className="flex items-start gap-2">
-                          <div className="bg-amber-100 p-1 rounded-full mt-0.5">
-                            <VideoIcon className="h-4 w-4 text-amber-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium">Video Evidence</p>
-                            <p className="text-sm text-gray-600">
-                              {videos.filter((v) => v.model_status === "done").length} out of {videos.length} videos
-                              processed
-                              {videos.length > 0 && videos.filter((v) => v.model_status === "done").length > 0
-                                ? " - 3D models available for review."
-                                : " - No 3D models available yet."}
-                            </p>
-                          </div>
-                        </li>
-                      </ul>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <p className="text-sm text-gray-500 mb-1">Car Model Identification</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-lg">{analysisData.carModelIdentification.score.toFixed(1)}</p>
+                      <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Car className="h-6 w-6 text-blue-600" />
+                      </div>
                     </div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <p className="text-sm text-gray-500 mb-1">Damage Assessment</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-lg">{analysisData.damageAssessment.score.toFixed(1)}</p>
+                      <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                        <ImageIcon className="h-6 w-6 text-blue-600" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <p className="text-sm text-gray-500 mb-1">3D Model Analysis</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-lg">8.5</p>
+                      <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Layers className="h-6 w-6 text-blue-600" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                    <div
-                      className={`p-4 rounded-md border ${
-                        (claim.claim_score || 0) > 7
-                          ? "bg-green-50 border-green-200 text-green-800"
-                          : (claim.claim_score || 0) > 4
-                            ? "bg-yellow-50 border-yellow-200 text-yellow-800"
-                            : "bg-red-50 border-red-200 text-red-800"
-                      }`}
+                <div className="mb-6">
+                  <h3 className="font-bold text-lg mb-3">Key Findings</h3>
+                  <ul className="space-y-2">
+                    {analysisData.keyFindings.map((finding, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <CheckSquare className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <span>{finding}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-6 bg-green-50 rounded-md border border-green-200 mb-6">
+                  <h3 className="text-xl font-bold text-green-800 mb-3 flex items-center">
+                    <Lightbulb className="h-6 w-6 mr-2" />
+                    Recommendation
+                  </h3>
+                  <p className="text-green-800 text-lg mb-4">{analysisData.recommendation}</p>
+                  <p className="text-green-700">
+                    This claim appears to be valid with consistent documentation and evidence. The car model has been
+                    verified, and the damage is consistent with the reported incident. However, some damage severity
+                    levels appear to be overestimated. We recommend approving the claim with an adjusted payout that
+                    reflects the actual damage severity.
+                  </p>
+                </div>
+
+                {canApproveOrReject() && (
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={() => updateClaimStatus("approved")}
+                      disabled={isUpdating}
+                      className="btn flex items-center bg-green-600 hover:bg-green-700 text-white"
                     >
-                      <h3 className="font-bold mb-2">Recommendation Details</h3>
-                      <p>
-                        {(claim.claim_score || 0) > 7
-                          ? "This claim appears to be valid with sufficient documentation and evidence. The damage is consistent with the claim description, and all documents have been verified. We recommend approving this claim."
-                          : (claim.claim_score || 0) > 4
-                            ? "This claim has some inconsistencies but appears generally valid. Some documents require verification, and the damage assessment shows mixed results. We recommend further review before making a final decision."
-                            : "This claim has significant issues with documentation or evidence. The damage assessment does not align with the claim description, or important documents are missing or unverified. We recommend rejecting this claim or requesting additional information from the claimant."}
-                      </p>
-                    </div>
-
-                    {canApproveOrReject() && (
-                      <div className="flex gap-3 justify-center pt-4">
-                        <button
-                          onClick={() => updateClaimStatus("approved")}
-                          disabled={isUpdating}
-                          className="btn flex items-center bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          <ThumbsUp className="mr-2 h-4 w-4" />
-                          Approve Claim
-                        </button>
-                        <button
-                          onClick={() => updateClaimStatus("rejected")}
-                          disabled={isUpdating}
-                          className="btn flex items-center bg-red-600 hover:bg-red-700 text-white"
-                        >
-                          <ThumbsDown className="mr-2 h-4 w-4" />
-                          Reject Claim
-                        </button>
-                      </div>
-                    )}
+                      <ThumbsUp className="mr-2 h-4 w-4" />
+                      Approve Claim
+                    </button>
+                    <button
+                      onClick={() => updateClaimStatus("rejected")}
+                      disabled={isUpdating}
+                      className="btn flex items-center bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <ThumbsDown className="mr-2 h-4 w-4" />
+                      Reject Claim
+                    </button>
                   </div>
                 )}
               </div>
