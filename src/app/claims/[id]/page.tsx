@@ -8,7 +8,18 @@ import { Footer } from "@/components/ui/footer"
 import { supabaseClient } from "@/lib/supabaseClient"
 import type { Claim, Document, Image, Video } from "@/lib/supabase-types"
 import { formatDate, getStatusColor, getSeverityColor } from "@/lib/utils"
-import { ArrowLeft, FileText, VideoIcon, Download, CheckCircle, XCircle, AlertCircle, Clock } from "lucide-react"
+import {
+  ArrowLeft,
+  FileText,
+  VideoIcon,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Clock,
+  Search,
+  ThumbsUp,
+  ThumbsDown,
+} from "lucide-react"
 
 export default function ClaimDetailPage() {
   const params = useParams()
@@ -21,6 +32,8 @@ export default function ClaimDetailPage() {
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateMessage, setUpdateMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   useEffect(() => {
     async function fetchClaimData() {
@@ -73,6 +86,43 @@ export default function ClaimDetailPage() {
     }
   }, [claimId])
 
+  const updateClaimStatus = async (status: "approved" | "rejected") => {
+    if (!claim) return
+
+    setIsUpdating(true)
+    setUpdateMessage(null)
+
+    try {
+      const { error } = await supabaseClient.from("claims").update({ status }).eq("id", claim.id)
+
+      if (error) throw error
+
+      // Update local state
+      setClaim({
+        ...claim,
+        status,
+      })
+
+      setUpdateMessage({
+        type: "success",
+        text: `Claim has been ${status} successfully.`,
+      })
+
+      // Refresh the page after 2 seconds
+      setTimeout(() => {
+        router.refresh()
+      }, 2000)
+    } catch (error) {
+      console.error("Error updating claim status:", error)
+      setUpdateMessage({
+        type: "error",
+        text: `Failed to update claim status. Please try again.`,
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "approved":
@@ -85,6 +135,10 @@ export default function ClaimDetailPage() {
       default:
         return <Clock className="h-6 w-6 text-blue-500" />
     }
+  }
+
+  const canApproveOrReject = () => {
+    return claim && (claim.status === "submitted" || claim.status === "analyzed")
   }
 
   if (loading) {
@@ -149,13 +203,66 @@ export default function ClaimDetailPage() {
               <p className="text-gray-500">Submitted on {formatDate(claim.created_at)}</p>
             </div>
             <div className="flex gap-2">
-              <button className="btn btn-outline flex items-center">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </button>
+              <Link href={`/claims/${claimId}/analyze`}>
+                <button className="btn btn-primary flex items-center">
+                  <Search className="mr-2 h-4 w-4" />
+                  Analyze Claim
+                </button>
+              </Link>
             </div>
           </div>
         </div>
+
+        {/* Status update message */}
+        {updateMessage && (
+          <div
+            className={`mb-6 p-4 rounded-md ${updateMessage.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}
+          >
+            {updateMessage.type === "success" ? (
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 mr-2" />
+                {updateMessage.text}
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                {updateMessage.text}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Approval/Rejection Buttons */}
+        {canApproveOrReject() && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-md border border-gray-200">
+            <h2 className="text-lg font-bold mb-2">Claim Decision</h2>
+            <p className="text-gray-600 mb-4">
+              Review the claim details and make a decision. You can also{" "}
+              <Link href={`/claims/${claimId}/analyze`} className="text-blue-600 hover:underline">
+                analyze the claim
+              </Link>{" "}
+              for a more detailed review.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => updateClaimStatus("approved")}
+                disabled={isUpdating}
+                className="btn flex items-center bg-green-600 hover:bg-green-700 text-white"
+              >
+                <ThumbsUp className="mr-2 h-4 w-4" />
+                Approve Claim
+              </button>
+              <button
+                onClick={() => updateClaimStatus("rejected")}
+                disabled={isUpdating}
+                className="btn flex items-center bg-red-600 hover:bg-red-700 text-white"
+              >
+                <ThumbsDown className="mr-2 h-4 w-4" />
+                Reject Claim
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="border-b mb-6">
@@ -446,7 +553,6 @@ export default function ClaimDetailPage() {
                         </span>
                       </div>
                     </div>
-                    <Download className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                   </a>
                 ))}
               </div>
@@ -491,14 +597,6 @@ export default function ClaimDetailPage() {
                           className="text-blue-500 text-sm hover:underline"
                         >
                           View Full Size
-                        </a>
-                        <a
-                          href={img.file_url}
-                          download
-                          className="text-blue-500 text-sm hover:underline flex items-center"
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          Download
                         </a>
                       </div>
                     </div>
@@ -554,17 +652,6 @@ export default function ClaimDetailPage() {
                           </a>
                         </div>
                       )}
-
-                      <div className="mt-2 flex justify-end">
-                        <a
-                          href={video.file_url}
-                          download
-                          className="text-blue-500 text-sm hover:underline flex items-center"
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          Download
-                        </a>
-                      </div>
                     </div>
                   </div>
                 ))}
