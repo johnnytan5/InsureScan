@@ -467,6 +467,13 @@ export default function ClaimAnalyzePage() {
         const imagesData = await imagesResponse.json()
         setImages(imagesData || [])
 
+        if (imagesData && imagesData.length > 0) {
+          const firstImageUrl = imagesData[0].file_url;
+          if (firstImageUrl) {
+            runCarModelIdentification(firstImageUrl);
+          }
+        }
+
         // Fetch videos
         const videosResponse = await fetch(`/api/videos?claim_id=${claimId}`)
         if (!videosResponse.ok) {
@@ -780,45 +787,40 @@ export default function ClaimAnalyzePage() {
               <nav className="space-y-1">
                 <button
                   onClick={() => setActiveSection("summary")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "summary" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "summary" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <BarChart className="h-4 w-4 mr-2" />
                   Summary
                 </button>
                 <button
                   onClick={() => setActiveSection("documents")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "documents" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "documents" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <FileCheck className="h-4 w-4 mr-2" />
                   Document Verification
                 </button>
                 <button
                   onClick={() => setActiveSection("car-model")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "car-model" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "car-model" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <Car className="h-4 w-4 mr-2" />
                   Car Model Identification
                 </button>
                 <button
                   onClick={() => setActiveSection("damage")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "damage" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "damage" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Damage Assessment
                 </button>
                 <button
                   onClick={() => setActiveSection("recommendation")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                    activeSection === "recommendation" ? "bg-black text-white" : "hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "recommendation" ? "bg-black text-white" : "hover:bg-gray-100"
+                    }`}
                 >
                   <Lightbulb className="h-4 w-4 mr-2" />
                   Recommendation
@@ -1053,8 +1055,8 @@ export default function ClaimAnalyzePage() {
                             </h3>
                             <p className="text-blue-800">
                               {analysisData.documentVerification.carModel.match &&
-                              analysisData.documentVerification.ownerName.match &&
-                              analysisData.documentVerification.policyMaturity.isValid
+                                analysisData.documentVerification.ownerName.match &&
+                                analysisData.documentVerification.policyMaturity.isValid
                                 ? "All documents are consistent and authentic. The car model, owner information, and incident dates match across all submitted documents. The insurance policy is valid and covers the incident date."
                                 : "There are some inconsistencies in the documents. Please review the information carefully before proceeding."}
                             </p>
@@ -1262,13 +1264,12 @@ export default function ClaimAnalyzePage() {
                                 <div className="mb-3">
                                   <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                                   <span
-                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                      part.claimedSeverity === "severe"
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
                                         ? "bg-red-100 text-red-800"
                                         : part.claimedSeverity === "moderate"
                                           ? "bg-amber-100 text-amber-800"
                                           : "bg-yellow-100 text-yellow-800"
-                                    }`}
+                                      }`}
                                   >
                                     {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
                                   </span>
@@ -1276,13 +1277,12 @@ export default function ClaimAnalyzePage() {
                                 <div className="mb-3">
                                   <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                                   <span
-                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                      part.assessedSeverity === "severe"
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
                                         ? "bg-red-100 text-red-800"
                                         : part.assessedSeverity === "moderate"
                                           ? "bg-amber-100 text-amber-800"
                                           : "bg-yellow-100 text-yellow-800"
-                                    }`}
+                                      }`}
                                   >
                                     {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
                                   </span>
@@ -1584,8 +1584,8 @@ export default function ClaimAnalyzePage() {
                       </h3>
                       <p className="text-blue-800">
                         {analysisData.documentVerification.carModel.match &&
-                        analysisData.documentVerification.ownerName.match &&
-                        analysisData.documentVerification.policyMaturity.isValid
+                          analysisData.documentVerification.ownerName.match &&
+                          analysisData.documentVerification.policyMaturity.isValid
                           ? "All documents are consistent and authentic. The car model, owner information, and incident dates match across all submitted documents. The insurance policy is valid and covers the incident date."
                           : "There are some inconsistencies in the documents. Please review the information carefully before proceeding."}
                       </p>
@@ -1756,13 +1756,12 @@ export default function ClaimAnalyzePage() {
                           <div className="mb-3">
                             <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                part.claimedSeverity === "severe"
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
                                   ? "bg-red-100 text-red-800"
                                   : part.claimedSeverity === "moderate"
                                     ? "bg-amber-100 text-amber-800"
                                     : "bg-yellow-100 text-yellow-800"
-                              }`}
+                                }`}
                             >
                               {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
                             </span>
@@ -1770,13 +1769,12 @@ export default function ClaimAnalyzePage() {
                           <div className="mb-3">
                             <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                part.assessedSeverity === "severe"
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
                                   ? "bg-red-100 text-red-800"
                                   : part.assessedSeverity === "moderate"
                                     ? "bg-amber-100 text-amber-800"
                                     : "bg-yellow-100 text-yellow-800"
-                              }`}
+                                }`}
                             >
                               {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
                             </span>
