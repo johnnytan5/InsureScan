@@ -8,6 +8,7 @@ import { Footer } from "@/components/ui/footer"
 import { X, FileText, ImageIcon, Video } from "lucide-react"
 import { supabaseClient } from "@/lib/supabaseClient"
 import { v4 as uuidv4 } from "uuid"
+import { triggerDocumentProcessing } from "./action" // adjust path as needed
 
 export default function SubmitClaimPage() {
   const router = useRouter()
@@ -166,6 +167,15 @@ export default function SubmitClaimPage() {
           },
         ])
       }
+
+      //add code here
+      // Trigger background document processing
+      const result = await triggerDocumentProcessing(claimId)
+
+      if (!result.success) {
+        console.warn("Document processing failed:", result.error)
+      }
+
 
       // Redirect to the claim detail page
       router.push(`/claims/${claimId}`)
