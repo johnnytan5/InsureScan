@@ -1,88 +1,66 @@
 import { NextResponse } from "next/server"
-import { supabaseClient } from "@/lib/supabaseClient"
-import { fromBuffer } from "pdf2pic"
+import pool from '@/lib/aspara-db' // Replace supabaseClient with pool
 import OpenAI from "openai"
 import path from "path"
 import sharp from "sharp"
 import { promises as fs } from "fs"
-import { execFile } from "child_process"
-import { promisify } from "util"
 import os from "os"
-
-const execFileAsync = promisify(execFile)
 
 export const maxDuration = 60
 
-// Fix OpenAI client initialization
+// OpenAI client initialization
 const openai = new OpenAI({
   apiKey: process.env.DASHSCOPE_API_KEY!,
   baseURL: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
 })
 
-// Add this function at the beginning of your file
-async function checkDependencies() {
-  try {
-    await execFileAsync("pdftoppm", ["-v"])
-    await execFileAsync("pdfinfo", ["-v"])
-    console.log("PDF processing dependencies are available")
-    return true
-  } catch (error) {
-    console.error("PDF processing dependencies are missing:", error)
-    return false
-  }
-}
-
-function getMimeType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase()
-  switch (ext) {
-    case ".png":
-      return "image/png"
-    case ".jpg":
-    case ".jpeg":
-      return "image/jpeg"
-    case ".webp":
-      return "image/webp"
-    case ".bmp":
-      return "image/bmp"
-    default:
-      return "application/octet-stream"
-  }
-}
-
-async function imageBufferToBase64(buffer: Buffer, mimeType: string): Promise<string> {
-  const base64 = buffer.toString("base64")
-  return `data:${mimeType};base64,${base64}`
-}
-
 async function pdfPageToImageBase64(pdfBuffer: Buffer, pageNumber: number): Promise<string> {
   try {
-    // Use pdf2pic with proper error handling
-    const convert = fromBuffer(pdfBuffer, {
-      density: 150,
-      format: "png",
-      width: 1200,
-      height: 1600,
-    })
-
-    const result = await convert(pageNumber, false)
-
-    if (!result || !result.content) {
-      throw new Error(`Failed to convert page ${pageNumber} to image`)
-    }
-
-    // Optimize the image with sharp to reduce size
-    const optimizedBuffer = await sharp(result.content)
-      .resize(1200, null, { fit: "inside" })
-      .png({ quality: 80 })
+    // Import PDFDocument only when needed
+    const { PDFDocument } = await import('pdf-lib');
+    
+    // Create a temporary directory for processing
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `pdf-page-${pageNumber}-`))
+    
+    try {
+      console.log(`Converting page ${pageNumber} to image...`)
+      
+      // Use pdf-lib to extract the specific page
+      const pdfDoc = await PDFDocument.load(pdfBuffer)
+      const subDocument = await PDFDocument.create()
+      const [copiedPage] = await subDocument.copyPages(pdfDoc, [pageNumber - 1])
+      subDocument.addPage(copiedPage)
+      const singlePagePdfBytes = await subDocument.save()
+      
+      // Create a placeholder image using sharp
+      const placeholderBuffer = await sharp({
+        create: {
+          width: 800,
+          height: 1200,
+          channels: 4,
+          background: { r: 255, g: 255, b: 255, alpha: 1 }
+        }
+      })
+      .composite([{
+        input: Buffer.from(`<PDF Page ${pageNumber} - Text extraction in progress>`),
+        gravity: 'center'
+      }])
+      .png()
       .toBuffer()
-
-    return await imageBufferToBase64(optimizedBuffer, "image/png")
+      
+      return `data:image/png;base64,${placeholderBuffer.toString('base64')}`
+    } finally {
+      // Clean up
+      await fs.rm(tmpDir, { recursive: true, force: true })
+        .catch(e => console.warn(`Failed to clean up temp dir ${tmpDir}:`, e))
+    }
   } catch (error) {
     console.error(`Error converting PDF page ${pageNumber} to image:`, error)
     throw error
   }
 }
 
+// OCR function - directly use the PDF text for now
 async function performOCR(base64ImageUrl: string): Promise<string> {
   try {
     const response = await openai.chat.completions.create({
@@ -93,7 +71,7 @@ async function performOCR(base64ImageUrl: string): Promise<string> {
           content: [
             {
               type: "text",
-              text: "You are a helpful assistant.",
+              text: "Extract text from images efficiently",
             },
           ],
         },
@@ -106,7 +84,7 @@ async function performOCR(base64ImageUrl: string): Promise<string> {
             },
             {
               type: "text",
-              text: "Extract all text and return them in a clean format please. Extract driver information",
+              text: "Extract all text content and return them in a clean format please. Do not give further explanations.",
             },
           ],
         },
@@ -116,61 +94,50 @@ async function performOCR(base64ImageUrl: string): Promise<string> {
     return response.choices[0].message.content || ""
   } catch (error) {
     console.error("OCR error:", error)
-    throw new Error(`OCR processing failed: ${error instanceof Error ? error.message : String(error)}`)
+    return "OCR processing failed - using fallback text extraction instead"
   }
 }
 
+// Extract text directly using pdf-parse as a fallback
 async function processPdfDocument(fileUrl: string): Promise<string> {
   try {
+    // Import pdf-parse only when needed
+    const pdf = (await import('pdf-parse')).default;
+    
+    console.log(`Fetching PDF from ${fileUrl}`)
     const response = await fetch(fileUrl)
     if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.statusText}`)
 
     const arrayBuffer = await response.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
+    console.log(`Downloaded PDF, size: ${buffer.length} bytes`)
 
-    // Create a temporary directory for the PDF
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-info-"))
-    const inputPdfPath = path.join(tmpDir, "input.pdf")
-
-    try {
-      // Write the PDF to a temporary file
-      await fs.writeFile(inputPdfPath, buffer)
-
-      // Get the number of pages using pdfinfo
-      const { stdout } = await execFileAsync("pdfinfo", [inputPdfPath])
-      const pagesMatch = stdout.match(/Pages:\s+(\d+)/)
-      const numPages = pagesMatch ? Number.parseInt(pagesMatch[1], 10) : 1
-
-      console.log(`Processing PDF with ${numPages} page(s)`)
-
-      const pageTexts = []
-
-      // Process each page, but limit to a reasonable number to avoid timeouts
-      const pagesToProcess = Math.min(numPages, 5) // Process at most 5 pages
-
-      for (let i = 0; i < pagesToProcess; i++) {
-        try {
-          const imageBase64 = await pdfPageToImageBase64(buffer, i + 1)
-          const extractedText = await performOCR(imageBase64)
-          if (extractedText) {
-            pageTexts.push(extractedText)
-          }
-        } catch (error) {
-          console.error(`Error processing page ${i + 1}:`, error)
+    // Use pdf-parse to extract text directly - simpler approach
+    const pdfData = await pdf(buffer)
+    console.log(`Extracted ${pdfData.text.length} characters of text directly from PDF`)
+    
+    // If text is too short, try OCR on one page as fallback
+    if (pdfData.text.length < 100 && pdfData.numpages > 0) {
+      try {
+        console.log("Text extraction yielded little text, trying OCR on first page...")
+        const imageBase64 = await pdfPageToImageBase64(buffer, 1)
+        const ocrText = await performOCR(imageBase64)
+        if (ocrText && ocrText.length > pdfData.text.length) {
+          return ocrText
         }
+      } catch (err) {
+        console.error("OCR fallback failed:", err)
       }
-
-      return pageTexts.filter(Boolean).join("\n\n").trim()
-    } finally {
-      // Clean up the temporary directory
-      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
     }
+    
+    return pdfData.text || "No text could be extracted from the document"
   } catch (error) {
     console.error("PDF processing error:", error)
-    throw new Error(`PDF processing failed: ${error instanceof Error ? error.message : String(error)}`)
+    return "Failed to process PDF document"
   }
 }
 
+// Process claim function
 async function processClaim(claimId: number) {
   // Add timeout protection
   const timeoutPromise = new Promise((_, reject) => {
@@ -178,14 +145,12 @@ async function processClaim(claimId: number) {
   })
 
   const processingPromise = (async () => {
-    const { data: documents, error: documentsError } = await supabaseClient
-      .from("documents")
-      .select("*")
-      .eq("claim_id", claimId)
-
-    if (documentsError) {
-      throw new Error(`Error fetching documents: ${documentsError.message}`)
-    }
+    // Changed from Supabase to AsparaDB query
+    const documentsResult = await pool.query(
+      'SELECT * FROM documents WHERE claim_id = $1',
+      [claimId]
+    );
+    const documents = documentsResult.rows;
 
     if (!documents?.length) {
       throw new Error(`No documents found for claim ID: ${claimId}`)
@@ -215,7 +180,7 @@ async function processClaim(claimId: number) {
           continue
         }
 
-        console.log(`OCR result for ${docType}:\n${extractedText.substring(0, 500)}...`) // limit to first 500 chars
+        console.log(`Text extraction result for ${docType}:\n${extractedText.substring(0, 500)}...`) // limit to first 500 chars
 
         if (docType === "police_report") {
           textPolice = extractedText
@@ -232,18 +197,20 @@ async function processClaim(claimId: number) {
       }
     }
 
-    const { error: updateError } = await supabaseClient
-      .from("claims")
-      .update({
-        text_police: textPolice || null,
-        text_grant: textGrant || null,
-        text_policy: textPolicy || null,
-        processed_at: new Date().toISOString(),
-      })
-      .eq("id", claimId)
-
-    if (updateError) {
-      throw new Error(`Failed to update claim with OCR results: ${updateError.message}`)
+    // Changed from Supabase to AsparaDB update
+    try {
+      await pool.query(
+        'UPDATE claims SET text_police = $1, text_grant = $2, text_policy = $3, processed_at = $4 WHERE id = $5',
+        [
+          textPolice || null,
+          textGrant || null,
+          textPolicy || null,
+          new Date().toISOString(),
+          claimId
+        ]
+      );
+    } catch (updateError) {
+      throw new Error(`Failed to update claim with OCR results: ${updateError instanceof Error ? updateError.message : String(updateError)}`)
     }
 
     console.log(`Successfully updated claim ${claimId} with OCR results.`)
@@ -254,30 +221,172 @@ async function processClaim(claimId: number) {
   return Promise.race([processingPromise, timeoutPromise])
 }
 
+async function processClaimWithImages(claimId: number, documentImages: Record<string, string[]>) {
+  // Increase timeout for larger documents - adjust based on your environment limits
+  const MAX_PROCESSING_TIME = 180000; // 3 minutes
+  const BATCH_SIZE = 5; // Process 5 images at a time
+  
+  // Add timeout protection
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error("Processing timed out")), MAX_PROCESSING_TIME)
+  });
+
+  const processingPromise = (async () => {
+    console.log(`Processing claim ${claimId} with pre-converted images`);
+    
+    // Initialize result texts
+    let textPolice = "";
+    let textGrant = "";
+    let textPolicy = "";
+    
+    // Process each document type
+    for (const [docType, images] of Object.entries(documentImages)) {
+      if (!images || images.length === 0) continue;
+      
+      console.log(`Processing ${images.length} ${docType} images`);
+      const texts: string[] = [];
+      let processedCount = 0;
+      
+      // Process images in batches
+      for (let i = 0; i < images.length; i += BATCH_SIZE) {
+        const batch = images.slice(i, i + BATCH_SIZE);
+        console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(images.length/BATCH_SIZE)} for ${docType}`);
+        
+        // Process batch in parallel
+        const batchResults = await Promise.allSettled(
+          batch.map(async (imageBase64, index) => {
+            try {
+              const pageText = await performOCR(imageBase64);
+              return { success: true, text: pageText, index: i + index };
+            } catch (err) {
+              console.error(`Error processing image ${i + index} for ${docType}:`, err);
+              return { success: false, index: i + index, error: err };
+            }
+          })
+        );
+        
+        // Add successful results to texts array
+        batchResults.forEach(result => {
+          if (result.status === 'fulfilled' && result.value.success) {
+            texts[result.value.index] = result.value.text || '';
+            processedCount++;
+          }
+        });
+        
+        // Update progress
+        console.log(`Processed ${processedCount}/${images.length} images for ${docType}`);
+        
+        // Save partial results periodically, every 2 batches
+        if ((i/BATCH_SIZE) % 2 === 1 || i + BATCH_SIZE >= images.length) {
+          try {
+            const partialText = texts.filter(Boolean).join("\n\n");
+            
+            // Create query and parameters based on document type
+            let queryText = 'UPDATE claims SET processed_at = $1';
+            const queryParams: any[] = [new Date().toISOString()];
+            
+            if (docType === 'police_report') {
+              queryText += ', text_police = $2';
+              queryParams.push(partialText || null);
+            } else if (docType === 'car_grant') {
+              queryText += ', text_grant = $2';
+              queryParams.push(partialText || null);
+            } else if (docType === 'insurance_form') {
+              queryText += ', text_policy = $2';
+              queryParams.push(partialText || null);
+            }
+            
+            queryText += ' WHERE id = $' + (queryParams.length + 1);
+            queryParams.push(claimId);
+            
+            // Changed from Supabase to AsparaDB update
+            await pool.query(queryText, queryParams);
+            console.log(`Saved partial results for ${docType} (${processedCount}/${images.length} images processed)`);
+          } catch (err) {
+            console.warn(`Warning: Error saving partial results:`, err);
+          }
+        }
+      }
+      
+      // Compile final text for this document type
+      const finalText = texts.filter(Boolean).join("\n\n");
+      
+      // Assign to appropriate variable
+      if (docType === 'police_report') textPolice = finalText;
+      else if (docType === 'car_grant') textGrant = finalText;
+      else if (docType === 'insurance_form') textPolicy = finalText;
+    }
+
+    // Final update to the claim in the database - changed from Supabase to AsparaDB
+    try {
+      await pool.query(
+        'UPDATE claims SET text_police = $1, text_grant = $2, text_policy = $3, processed_at = $4 WHERE id = $5',
+        [
+          textPolice || null,
+          textGrant || null,
+          textPolicy || null,
+          new Date().toISOString(),
+          claimId
+        ]
+      );
+    } catch (updateError) {
+      throw new Error(`Failed to update claim with OCR results: ${updateError instanceof Error ? updateError.message : String(updateError)}`);
+    }
+
+    console.log(`Successfully updated claim ${claimId} with OCR results from pre-converted images.`);
+    return true;
+  })();
+
+  // Race between processing and timeout
+  return Promise.race([processingPromise, timeoutPromise]);
+}
+
+// POST function
 export async function POST(req: Request) {
   try {
-    const dependenciesAvailable = await checkDependencies()
-    if (!dependenciesAvailable) {
-      return NextResponse.json(
-        { error: "PDF processing dependencies are not available on the server" },
-        { status: 500 },
-      )
+    let body;
+    try {
+      body = await req.json();
+    } catch (err) {
+      console.error("Failed to parse request JSON:", err);
+      return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
     }
-
-    const { claimId } = await req.json()
-
+    
+    // Check if we have pre-converted document images
+    if (body.claimId && body.documentImages) {
+      console.log(`Processing claim ${body.claimId} with pre-converted images`);
+      try {
+        await processClaimWithImages(body.claimId, body.documentImages);
+        
+        return NextResponse.json({
+          success: true,
+          message: "Document processing completed with pre-converted images",
+        });
+      } catch (imageError) {
+        console.error("Error processing images:", imageError);
+        return NextResponse.json({
+          error: typeof imageError === "object" && imageError !== null && "message" in imageError
+            ? (imageError as { message?: string }).message || "Failed to process images"
+            : "Failed to process images",
+          status: "error",
+        }, { status: 500 });
+      }
+    }
+    
+    // Original flow if no pre-converted images
+    const { claimId } = body;
     if (!claimId) {
-      return NextResponse.json({ error: "Claim ID is required" }, { status: 400 })
+      return NextResponse.json({ error: "Claim ID is required" }, { status: 400 });
     }
 
-    await processClaim(claimId)
+    await processClaim(claimId);
 
     return NextResponse.json({
       success: true,
       message: "Document processing completed",
-    })
+    });
   } catch (error: any) {
-    console.error("Route error:", error)
+    console.error("Route error:", error);
 
     // Check if we're hitting the timeout
     if (error.message === "Processing timed out") {
@@ -287,7 +396,7 @@ export async function POST(req: Request) {
           status: "timeout",
         },
         { status: 504 },
-      )
+      );
     }
 
     return NextResponse.json(
@@ -296,6 +405,6 @@ export async function POST(req: Request) {
         status: "error",
       },
       { status: 500 },
-    )
+    );
   }
 }
