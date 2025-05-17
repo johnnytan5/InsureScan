@@ -37,6 +37,8 @@
     "sharp": "^0.34.1",
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.176.0",
+    "three-stdlib": "^2.36.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
@@ -47,6 +49,7 @@
     "@types/pg": "^8.15.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.176.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
