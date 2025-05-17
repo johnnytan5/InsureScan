@@ -14,7 +14,7 @@ export default function DashboardPage() {
 
 
   function Model(props: PrimitiveProps){
-    const {scene} = useGLTF("/bmw.glb");
+    const {scene} = useGLTF("/honda.glb");
     return <primitive object={scene} {...props}/>
   }
 
