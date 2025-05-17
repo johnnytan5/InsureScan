@@ -63,30 +63,6 @@ export default function ClaimAnalyzePage() {
   const [policeData, setPoliceData] = useState<any>(null)
   const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
 
-  // LLM processing states
-  const [llmLoading, setLlmLoading] = useState(false)
-  const [llmError, setLlmError] = useState<string | null>(null)
-  const [grantData, setGrantData] = useState<any>(null)
-  const [policyData, setPolicyData] = useState<any>(null)
-  const [policeData, setPoliceData] = useState<any>(null)
-  const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
-
-  // LLM processing states
-  const [llmLoading, setLlmLoading] = useState(false)
-  const [llmError, setLlmError] = useState<string | null>(null)
-  const [grantData, setGrantData] = useState<any>(null)
-  const [policyData, setPolicyData] = useState<any>(null)
-  const [policeData, setPoliceData] = useState<any>(null)
-  const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
-
-  // LLM processing states
-  const [llmLoading, setLlmLoading] = useState(false)
-  const [llmError, setLlmError] = useState<string | null>(null)
-  const [grantData, setGrantData] = useState<any>(null)
-  const [policyData, setPolicyData] = useState<any>(null)
-  const [policeData, setPoliceData] = useState<any>(null)
-  const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
-
   // Expanded sections state
   const [expandedSections, setExpandedSections] = useState({
     model: true,
