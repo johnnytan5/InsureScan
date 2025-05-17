@@ -16,25 +16,23 @@ export default function ClaimsPage() {
   useEffect(() => {
     async function fetchClaims() {
       try {
-        const { data, error } = await supabaseClient
-          .from("claims")
-          .select("*")
-          .order("created_at", { ascending: false })
-
-        if (error) {
-          throw error
+        const response = await fetch('/api/claims');
+        
+        if (!response.ok) {
+          throw new Error(`Error fetching claims: ${response.statusText}`);
         }
-
-        setClaims(data || [])
+        
+        const data = await response.json();
+        setClaims(data || []);
       } catch (error) {
-        console.error("Error fetching claims:", error)
+        console.error("Error fetching claims:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
-    fetchClaims()
-  }, [])
+    fetchClaims();
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -141,8 +139,8 @@ export default function ClaimsPage() {
                             {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
                           </span>
                         </td>
-                        <td className="p-2">{claim.claim_score ? claim.claim_score.toFixed(2) : "N/A"}</td>
-                        <td className="p-2 text-right">
+                        <td className="p-2">{claim.claim_score ? Number(claim.claim_score).toFixed(2) : "N/A"}</td>
+                          <td className="p-2 text-right">
                           <Link href={`/claims/${claim.id}`}>
                             <button className="btn btn-outline">View</button>
                           </Link>
