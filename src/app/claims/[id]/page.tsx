@@ -35,111 +35,114 @@ export default function ClaimDetailPage() {
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateMessage, setUpdateMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
-  useEffect(() => {
+useEffect(() => {
     async function fetchClaimData() {
       try {
         // Fetch claim details
-        const { data: claimData, error: claimError } = await supabaseClient
-          .from("claims")
-          .select("*")
-          .eq("id", claimId)
-          .single()
-
-        if (claimError) throw claimError
-        setClaim(claimData)
+        const claimResponse = await fetch(`/api/claims/${claimId}`);
+        if (!claimResponse.ok) {
+          throw new Error(`Failed to fetch claim: ${claimResponse.statusText}`);
+        }
+        const claimData = await claimResponse.json();
+        setClaim(claimData);
 
         // Fetch documents
-        const { data: documentsData, error: documentsError } = await supabaseClient
-          .from("documents")
-          .select("*")
-          .eq("claim_id", claimId)
-
-        if (documentsError) throw documentsError
-        setDocuments(documentsData || [])
+        const documentsResponse = await fetch(`/api/documents?claim_id=${claimId}`);
+        if (!documentsResponse.ok) {
+          throw new Error(`Failed to fetch documents: ${documentsResponse.statusText}`);
+        }
+        const documentsData = await documentsResponse.json();
+        setDocuments(documentsData || []);
 
         // Fetch images
-        const { data: imagesData, error: imagesError } = await supabaseClient
-          .from("images")
-          .select("*")
-          .eq("claim_id", claimId)
-
-        if (imagesError) throw imagesError
-        setImages(imagesData || [])
+        const imagesResponse = await fetch(`/api/images?claim_id=${claimId}`);
+        if (!imagesResponse.ok) {
+          throw new Error(`Failed to fetch images: ${imagesResponse.statusText}`);
+        }
+        const imagesData = await imagesResponse.json();
+        setImages(imagesData || []);
 
         // Fetch videos
-        const { data: videosData, error: videosError } = await supabaseClient
-          .from("videos")
-          .select("*")
-          .eq("claim_id", claimId)
-
-        if (videosError) throw videosError
-        setVideos(videosData || [])
+        const videosResponse = await fetch(`/api/videos?claim_id=${claimId}`);
+        if (!videosResponse.ok) {
+          throw new Error(`Failed to fetch videos: ${videosResponse.statusText}`);
+        }
+        const videosData = await videosResponse.json();
+        setVideos(videosData || []);
       } catch (error) {
-        console.error("Error fetching claim data:", error)
+        console.error("Error fetching claim data:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
     if (claimId) {
-      fetchClaimData()
+      fetchClaimData();
     }
-  }, [claimId])
+  }, [claimId]);
 
   const updateClaimStatus = async (status: "approved" | "rejected") => {
-    if (!claim) return
+    if (!claim) return;
 
-    setIsUpdating(true)
-    setUpdateMessage(null)
+    setIsUpdating(true);
+    setUpdateMessage(null);
 
     try {
-      const { error } = await supabaseClient.from("claims").update({ status }).eq("id", claim.id)
+      const response = await fetch(`/api/claims/${claim.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      });
 
-      if (error) throw error
+      if (!response.ok) {
+        throw new Error(`Failed to update claim status: ${response.statusText}`);
+      }
 
       // Update local state
       setClaim({
         ...claim,
         status,
-      })
+      });
 
       setUpdateMessage({
         type: "success",
         text: `Claim has been ${status} successfully.`,
-      })
+      });
 
       // Refresh the page after 2 seconds
       setTimeout(() => {
-        router.refresh()
-      }, 2000)
+        router.refresh();
+      }, 2000);
     } catch (error) {
-      console.error("Error updating claim status:", error)
+      console.error("Error updating claim status:", error);
       setUpdateMessage({
         type: "error",
         text: `Failed to update claim status. Please try again.`,
-      })
+      });
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "approved":
-        return <CheckCircle className="h-6 w-6 text-green-500" />
+        return <CheckCircle className="h-6 w-6 text-green-500" />;
       case "rejected":
-        return <XCircle className="h-6 w-6 text-red-500" />
+        return <XCircle className="h-6 w-6 text-red-500" />;
       case "analyzed":
-        return <AlertCircle className="h-6 w-6 text-yellow-500" />
+        return <AlertCircle className="h-6 w-6 text-yellow-500" />;
       case "submitted":
       default:
-        return <Clock className="h-6 w-6 text-blue-500" />
+        return <Clock className="h-6 w-6 text-blue-500" />;
     }
-  }
+  };
 
   const canApproveOrReject = () => {
-    return claim && (claim.status === "submitted" || claim.status === "analyzed")
-  }
+    return claim && (claim.status === "submitted" || claim.status === "analyzed");
+  };
 
   if (loading) {
     return (
@@ -407,7 +410,7 @@ export default function ClaimDetailPage() {
                 {claim.claim_score && (
                   <div>
                     <p className="text-sm text-gray-500">Claim Score</p>
-                    <p className="font-medium">{claim.claim_score.toFixed(2)}</p>
+                    <p className="font-medium">{Number(claim.claim_score).toFixed(2)}</p>
                   </div>
                 )}
                 <div>

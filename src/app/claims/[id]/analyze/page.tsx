@@ -51,6 +51,9 @@ export default function ClaimAnalyzePage() {
   const [activeSection, setActiveSection] = useState("summary")
   const [analysisInProgress, setAnalysisInProgress] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
+  const [detectedModel, setDetectedModel] = useState<string | null>(null)
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null)
 
   // LLM processing states
   const [llmLoading, setLlmLoading] = useState(false)
@@ -340,151 +343,164 @@ export default function ClaimAnalyzePage() {
     console.log("Analysis data: ", analysisData);
   }
 
-  useEffect(() => {
-    async function fetchClaimData() {
-      try {
-        // Fetch claim details
-        const { data: claimData, error: claimError } = await supabaseClient
-          .from("claims")
-          .select("*")
-          .eq("id", claimId)
-          .single()
-
-        if (claimError) throw claimError
-        setClaim(claimData)
-
-        // Fetch documents
-        const { data: documentsData, error: documentsError } = await supabaseClient
-          .from("documents")
-          .select("*")
-          .eq("claim_id", claimId)
-
-        if (documentsError) throw documentsError
-        setDocuments(documentsData || [])
-
-        // Fetch images
-        const { data: imagesData, error: imagesError } = await supabaseClient
-          .from("images")
-          .select("*")
-          .eq("claim_id", claimId)
-
-        if (imagesError) throw imagesError
-        setImages(imagesData || [])
-
-        // Fetch videos
-        const { data: videosData, error: videosError } = await supabaseClient
-          .from("videos")
-          .select("*")
-          .eq("claim_id", claimId)
-
-        if (videosError) throw videosError
-        setVideos(videosData || [])
-      } catch (error) {
-        console.error("Error fetching claim data:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (claimId) {
-      fetchClaimData()
-    }
-  }, [claimId])
-
-  // Process documents with LLM when claim data is loaded
-  useEffect(() => {
-    if (claim && !llmLoading && !documentVerificationComplete) {
-      console.log("Start processing document verification now")
-      processDocumentsWithLLM()
-    }
-  }, [claim])
-
-  const updateClaimStatus = async (status: "approved" | "rejected" | "analyzed") => {
-    if (!claim) return
-
-    setIsUpdating(true)
-    setUpdateMessage(null)
-
+// Modified fetchClaimData function
+useEffect(() => {
+  async function fetchClaimData() {
     try {
-      const { error } = await supabaseClient.from("claims").update({ status }).eq("id", claim.id)
-
-      if (error) throw error
-
-      // Update local state
-      setClaim({
-        ...claim,
-        status,
-      })
-
-      setUpdateMessage({
-        type: "success",
-        text: status === "analyzed" ? "Claim has been marked as analyzed." : `Claim has been ${status} successfully.`,
-      })
-
-      // Redirect after approval/rejection
-      if (status === "approved" || status === "rejected") {
-        setTimeout(() => {
-          router.push(`/claims/${claimId}`)
-        }, 2000)
+      // Fetch claim details
+      const claimResponse = await fetch(`/api/claims/${claimId}`);
+      if (!claimResponse.ok) {
+        throw new Error(`Failed to fetch claim: ${claimResponse.statusText}`);
       }
+      const claimData = await claimResponse.json();
+      setClaim(claimData);
+
+      // Fetch documents
+      const documentsResponse = await fetch(`/api/documents?claim_id=${claimId}`);
+      if (!documentsResponse.ok) {
+        throw new Error(`Failed to fetch documents: ${documentsResponse.statusText}`);
+      }
+      const documentsData = await documentsResponse.json();
+      setDocuments(documentsData || []);
+
+      // Fetch images
+      const imagesResponse = await fetch(`/api/images?claim_id=${claimId}`);
+      if (!imagesResponse.ok) {
+        throw new Error(`Failed to fetch images: ${imagesResponse.statusText}`);
+      }
+      const imagesData = await imagesResponse.json();
+      setImages(imagesData || []);
+
+      // Fetch videos
+      const videosResponse = await fetch(`/api/videos?claim_id=${claimId}`);
+      if (!videosResponse.ok) {
+        throw new Error(`Failed to fetch videos: ${videosResponse.statusText}`);
+      }
+      const videosData = await videosResponse.json();
+      setVideos(videosData || []);
     } catch (error) {
-      console.error("Error updating claim status:", error)
-      setUpdateMessage({
-        type: "error",
-        text: `Failed to update claim status. Please try again.`,
-      })
+      console.error("Error fetching claim data:", error);
     } finally {
-      setIsUpdating(false)
+      setLoading(false);
     }
   }
 
-  const runAnalysis = async () => {
-    if (!claim) return
+  if (claimId) {
+    fetchClaimData();
+  }
+}, [claimId]);
 
-    setAnalysisInProgress(true)
+// Modified updateClaimStatus function
+const updateClaimStatus = async (status: "approved" | "rejected" | "analyzed") => {
+  if (!claim) return;
 
-    try {
-      // Simulate analysis process
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+  setIsUpdating(true);
+  setUpdateMessage(null);
 
-      // Update claim score
-      const claimScore = analysisData.overallScore
+  try {
+    const response = await fetch(`/api/claims/${claim.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status }),
+    });
 
-      const { error } = await supabaseClient
-        .from("claims")
-        .update({
-          claim_score: claimScore,
-          status: "analyzed",
-        })
-        .eq("id", claim.id)
+    if (!response.ok) {
+      throw new Error(`Failed to update claim status: ${response.statusText}`);
+    }
 
-      if (error) throw error
+    // Update local state
+    setClaim({
+      ...claim,
+      status,
+    });
 
-      // Update local state
-      setClaim({
-        ...claim,
+    setUpdateMessage({
+      type: "success",
+      text: status === "analyzed" ? "Claim has been marked as analyzed." : `Claim has been ${status} successfully.`,
+    });
+
+    // Redirect after approval/rejection
+    if (status === "approved" || status === "rejected") {
+      setTimeout(() => {
+        router.push(`/claims/${claimId}`);
+      }, 2000);
+    }
+  } catch (error) {
+    console.error("Error updating claim status:", error);
+    setUpdateMessage({
+      type: "error",
+      text: `Failed to update claim status. Please try again.`,
+    });
+  } finally {
+    setIsUpdating(false);
+  }
+};
+
+// Modified runAnalysis function
+const runAnalysis = async () => {
+  if (!claim) return;
+
+  setAnalysisInProgress(true);
+
+  try {
+    // Simulate analysis process
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    // Update claim score (simulated)
+    const claimScore = analysisData.overallScore;
+
+    const claimUpdateResponse = await fetch(`/api/claims/${claim.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         claim_score: claimScore,
-        status: "analyzed",
-      })
+        status: "analyzed"
+      }),
+    });
 
-      // Simulate updating image damage scores
-      const updatedImages = [...images]
-      for (let i = 0; i < updatedImages.length; i++) {
-        const damageScore = Math.round(Math.random() * 100) / 10
+    if (!claimUpdateResponse.ok) {
+      throw new Error(`Failed to update claim score: ${claimUpdateResponse.statusText}`);
+    }
 
-        await supabaseClient.from("images").update({ damage_score: damageScore }).eq("id", updatedImages[i].id)
+    // Update local state
+    setClaim({
+      ...claim,
+      claim_score: claimScore,
+      status: "analyzed",
+    });
 
-        updatedImages[i].damage_score = damageScore
+    // Simulate updating image damage scores
+    const updatedImages = [...images];
+    for (let i = 0; i < updatedImages.length; i++) {
+      const damageScore = Math.round(Math.random() * 100) / 10;
+      
+      const imageUpdateResponse = await fetch(`/api/images/${updatedImages[i].id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ damage_score: damageScore }),
+      });
+      
+      if (!imageUpdateResponse.ok) {
+        console.warn(`Failed to update image score for image ${updatedImages[i].id}`);
       }
 
-      setImages(updatedImages)
-      setAnalysisComplete(true)
-    } catch (error) {
-      console.error("Error running analysis:", error)
-    } finally {
-      setAnalysisInProgress(false)
+      updatedImages[i].damage_score = damageScore;
     }
+
+    setImages(updatedImages);
+    setAnalysisComplete(true);
+  } catch (error) {
+    console.error("Error running analysis:", error);
+  } finally {
+    setAnalysisInProgress(false);
   }
+};
 
   const canApproveOrReject = () => {
     return claim && (claim.status === "submitted" || claim.status === "analyzed")
@@ -496,6 +512,30 @@ export default function ClaimAnalyzePage() {
       [section]: !expandedSections[section],
     })
   }
+
+  const runCarModelIdentification = async (imageUrl: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/predict_car_model/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: imageUrl }),
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch model prediction");
+
+      const data = await response.json();
+      setDetectedModel(data.car_model);
+      setConfidence(data.confidence);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -959,14 +999,29 @@ export default function ClaimAnalyzePage() {
                               </div>
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Detected Model</p>
-                                <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
+                                {loading ? (
+                                  <p className="text-sm text-gray-600 italic">Analyzing...</p>
+                                ) : error ? (
+                                  <p className="text-sm text-red-500">{error}</p>
+                                ) : detectedModel ? (
+                                  <p className="font-bold text-lg">{detectedModel}</p>
+                                ) : (
+                                  <p className="text-sm text-gray-400">Not available</p>
+                                )}
                               </div>
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Confidence</p>
-                                <p className="font-bold text-lg">
-                                  {(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%
-                                </p>
+                                {loading ? (
+                                  <p className="text-sm text-gray-600 italic">Processing...</p>
+                                ) : error ? (
+                                  <p className="text-sm text-red-500">-</p>
+                                ) : confidence !== null ? (
+                                  <p className="font-bold text-lg">{(confidence * 100).toFixed(1)}%</p>
+                                ) : (
+                                  <p className="text-sm text-gray-400">Not available</p>
+                                )}
                               </div>
+
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Match</p>
                                 {analysisData.carModelIdentification.match ? (
@@ -1110,10 +1165,10 @@ export default function ClaimAnalyzePage() {
                                   <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                                   <span
                                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
-                                        ? "bg-red-100 text-red-800"
-                                        : part.claimedSeverity === "moderate"
-                                          ? "bg-amber-100 text-amber-800"
-                                          : "bg-yellow-100 text-yellow-800"
+                                      ? "bg-red-100 text-red-800"
+                                      : part.claimedSeverity === "moderate"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-yellow-100 text-yellow-800"
                                       }`}
                                   >
                                     {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
@@ -1123,10 +1178,10 @@ export default function ClaimAnalyzePage() {
                                   <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                                   <span
                                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
-                                        ? "bg-red-100 text-red-800"
-                                        : part.assessedSeverity === "moderate"
-                                          ? "bg-amber-100 text-amber-800"
-                                          : "bg-yellow-100 text-yellow-800"
+                                      ? "bg-red-100 text-red-800"
+                                      : part.assessedSeverity === "moderate"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-yellow-100 text-yellow-800"
                                       }`}
                                   >
                                     {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
@@ -1461,24 +1516,26 @@ export default function ClaimAnalyzePage() {
                         </div>
                         <div>
                           <p className="text-sm text-gray-500 mb-1">Detected Model</p>
-                          <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
+                          {loading ? (
+                            <p className="text-sm text-gray-600 italic">Analyzing...</p>
+                          ) : error ? (
+                            <p className="text-sm text-red-500">{error}</p>
+                          ) : detectedModel ? (
+                            <p className="font-bold text-lg">{detectedModel}</p>
+                          ) : (
+                            <p className="text-sm text-gray-400">Not available</p>
+                          )}
                         </div>
                         <div>
                           <p className="text-sm text-gray-500 mb-1">Confidence</p>
-                          <p className="font-bold text-lg">
-                            {(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500 mb-1">Match</p>
-                          {analysisData.carModelIdentification.match ? (
-                            <span className="text-green-600 flex items-center">
-                              <CheckCircle className="h-4 w-4 mr-1" /> Verified
-                            </span>
+                          {loading ? (
+                            <p className="text-sm text-gray-600 italic">Processing...</p>
+                          ) : error ? (
+                            <p className="text-sm text-red-500">-</p>
+                          ) : confidence !== null ? (
+                            <p className="font-bold text-lg">{(confidence * 100).toFixed(1)}%</p>
                           ) : (
-                            <span className="text-red-600 flex items-center">
-                              <AlertCircle className="h-4 w-4 mr-1" /> Mismatch
-                            </span>
+                            <p className="text-sm text-gray-400">Not available</p>
                           )}
                         </div>
                       </div>
@@ -1600,10 +1657,10 @@ export default function ClaimAnalyzePage() {
                             <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
-                                  ? "bg-red-100 text-red-800"
-                                  : part.claimedSeverity === "moderate"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-yellow-100 text-yellow-800"
+                                ? "bg-red-100 text-red-800"
+                                : part.claimedSeverity === "moderate"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-yellow-100 text-yellow-800"
                                 }`}
                             >
                               {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
@@ -1613,10 +1670,10 @@ export default function ClaimAnalyzePage() {
                             <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
-                                  ? "bg-red-100 text-red-800"
-                                  : part.assessedSeverity === "moderate"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-yellow-100 text-yellow-800"
+                                ? "bg-red-100 text-red-800"
+                                : part.assessedSeverity === "moderate"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-yellow-100 text-yellow-800"
                                 }`}
                             >
                               {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
