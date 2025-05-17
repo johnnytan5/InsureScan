@@ -1,14 +1,14 @@
 "use client"
 
-import { useEffect, useState, Suspense } from "react"
+import { useEffect, useState, Suspense, useRef } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { Canvas } from "@react-three/fiber"
 import { useGLTF, Stage, PresentationControls, OrbitControls } from "@react-three/drei"
+import { OrbitControls as ThreeOrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import type { PrimitiveProps } from "@react-three/fiber"
 import { Navbar } from "@/components/ui/navbar"
 import { Footer } from "@/components/ui/footer"
-import { supabaseClient } from "@/lib/supabaseClient"
 import type { Claim, Document, Image, Video } from "@/lib/supabase-types"
 import { formatDate, getStatusColor } from "@/lib/utils"
 import {
@@ -31,8 +31,111 @@ import {
   Loader2,
 } from "lucide-react"
 
+import * as THREE from "three"
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js"
+
+// Damage Analysis Component
+const DamageAnalysis = () => {
+  const mountRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!mountRef.current) return
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100)
+    camera.position.set(0, 1.5, 3)
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    renderer.setClearColor(0x000000, 1) // Set background to black
+    mountRef.current.appendChild(renderer.domElement)
+
+    const controls = new ThreeOrbitControls(camera, renderer.domElement)
+    scene.add(new THREE.AmbientLight(0xffffff, 1))
+
+    const loader = new OBJLoader()
+    let original: THREE.Mesh | null = null
+    let damaged: THREE.Mesh | null = null
+
+    const checkLoaded = () => {
+      if (original && damaged) {
+        compareMeshes(original, damaged)
+      }
+    }
+
+    loader.load("/original.obj", (obj) => {
+      original = obj.children[0] as THREE.Mesh
+      checkLoaded()
+    })
+
+    loader.load("/damaged.obj", (obj) => {
+      damaged = obj.children[0] as THREE.Mesh
+      checkLoaded()
+    })
+
+    const compareMeshes = (original: THREE.Mesh, damaged: THREE.Mesh) => {
+      const origGeo = original.geometry.clone()
+      const dmgGeo = damaged.geometry.clone()
+
+      const origPos = origGeo.attributes.position as THREE.BufferAttribute
+      const dmgPos = dmgGeo.attributes.position as THREE.BufferAttribute
+
+      const colorArray = new Float32Array(dmgPos.count * 3)
+      const threshold = 0.01
+
+      for (let i = 0; i < dmgPos.count; i++) {
+        const dx = dmgPos.getX(i) - origPos.getX(i)
+        const dy = dmgPos.getY(i) - origPos.getY(i)
+        const dz = dmgPos.getZ(i) - origPos.getZ(i)
+        const diff = Math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        if (diff > threshold) {
+          colorArray[i * 3 + 0] = 1 // R
+          colorArray[i * 3 + 1] = 0 // G
+          colorArray[i * 3 + 2] = 0 // B
+        } else {
+          colorArray[i * 3 + 0] = 0.5
+          colorArray[i * 3 + 1] = 0.5
+          colorArray[i * 3 + 2] = 0.5
+        }
+      }
+
+      dmgGeo.setAttribute("color", new THREE.BufferAttribute(colorArray, 3))
+      const mat = new THREE.MeshStandardMaterial({ vertexColors: true })
+      const resultMesh = new THREE.Mesh(dmgGeo, mat)
+      scene.add(resultMesh)
+    }
+
+    const handleResize = () => {
+      if (!mountRef.current) return
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+      renderer.setPixelRatio(window.devicePixelRatio)
+    }
+    window.addEventListener("resize", handleResize)
+
+    const animate = () => {
+      requestAnimationFrame(animate)
+      controls.update()
+      renderer.render(scene, camera)
+    }
+    animate()
+
+    return () => {
+      window.removeEventListener("resize", handleResize)
+      if (mountRef.current && renderer.domElement) {
+        mountRef.current.removeChild(renderer.domElement)
+      }
+    }
+  }, [])
+
+  return <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
+}
+
 function Model(props: PrimitiveProps) {
-  const { scene } = useGLTF("/honda.glb")
+  const { scene } = useGLTF("/damaged.glb")
   return <primitive object={scene} {...props} />
 }
 
@@ -52,7 +155,7 @@ export default function ClaimAnalyzePage() {
   const [analysisInProgress, setAnalysisInProgress] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
   const [detectedModel, setDetectedModel] = useState<string | null>(null)
-  const [confidence, setConfidence] = useState<number | null>(null);
+  const [confidence, setConfidence] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // LLM processing states
@@ -176,11 +279,10 @@ export default function ClaimAnalyzePage() {
   }
 
   useEffect(() => {
-  if (grantData && policyData && policeData) {
-    updateAnalysisDataWithLlmResults()
-  }
-}, [grantData, policyData, policeData])
-
+    if (grantData && policyData && policeData) {
+      updateAnalysisDataWithLlmResults()
+    }
+  }, [grantData, policyData, policeData])
 
   // Add a function to clean and parse JSON from LLM responses
   function cleanAndParseJSON(text: string) {
@@ -223,9 +325,8 @@ export default function ClaimAnalyzePage() {
         const grantPrompt = `Context: ${claimData.text_grant}\nPlease extract these information in English and return them in this JSON format WITHOUT ANY MARKDOWN FORMATTING (no backticks, no \`\`\`json tags): {"grant": {"car_model": "<car model here>", "owner_name": "<owner name here>"}}`
         const grantResult = await handleLlmQuery(grantPrompt)
         if (grantResult) {
-          console.log("Grant data processed. Grant data: ", grantResult);
+          console.log("Grant data processed. Grant data: ", grantResult)
           setGrantData(cleanAndParseJSON(grantResult))
-
         }
         console.log("Grant", grantData)
       }
@@ -235,7 +336,7 @@ export default function ClaimAnalyzePage() {
         const policyPrompt = `Context: ${claimData.text_policy}\nPlease extract these information in English and return them in this JSON format WITHOUT ANY MARKDOWN FORMATTING (no backticks, no \`\`\`json tags): {"policy": {"car_model": "<car model here>", "owner_name": "<owner name here>", "coverage_date": "<policy coverage END date here, format: DD/MM/YYYY>"}}`
         const policyResult = await handleLlmQuery(policyPrompt)
         if (policyResult) {
-          console.log("Policy data processed. Policy data: ", policyResult);
+          console.log("Policy data processed. Policy data: ", policyResult)
           setPolicyData(cleanAndParseJSON(policyResult))
         }
         console.log("Policy: ", policyData)
@@ -246,7 +347,7 @@ export default function ClaimAnalyzePage() {
         const policePrompt = `Context: ${claimData.text_police}\nPlease extract these information in English and return them in this JSON format WITHOUT ANY MARKDOWN FORMATTING (no backticks, no \`\`\`json tags): {"report": {"car_model": "<car model here>", "owner_name": "<owner name here>", "incident_date": "<incident date here>, format: DD/MM/YYYY"}}`
         const policeResult = await handleLlmQuery(policePrompt)
         if (policeResult) {
-          console.log("Police data processed. Police data: ", policeResult);
+          console.log("Police data processed. Police data: ", policeResult)
           setPoliceData(cleanAndParseJSON(policeResult))
         }
       }
@@ -256,10 +357,7 @@ export default function ClaimAnalyzePage() {
 
       // Update analysis data with the extracted information
 
-
       // updateAnalysisDataWithLlmResults()
-
-      
     } catch (error) {
       console.error("Error processing documents with LLM:", error)
       setLlmError(error instanceof Error ? error.message : "Failed to process documents with LLM. Please try again.")
@@ -299,15 +397,13 @@ export default function ClaimAnalyzePage() {
     // Check if policy is valid (simple check - can be enhanced)
     const isPolicyValid = policyDate ? new Date(policyDate) > new Date() : false
 
-    console.log("Score is calculated!");
+    console.log("Score is calculated!")
 
     // Calculate document verification score
     const docVerificationScore =
       (((carModelMatch ? 3 : 0) + (ownerNameMatch ? 3 : 0) + (incidentDateMatch ? 2 : 0) + (isPolicyValid ? 2 : 0)) /
         10) *
-      10;
-
-
+      10
 
     // Update analysis data
     setAnalysisData((prevData) => ({
@@ -340,167 +436,174 @@ export default function ClaimAnalyzePage() {
       overallScore:
         (docVerificationScore + prevData.carModelIdentification.score + prevData.damageAssessment.score) / 3,
     }))
-    console.log("Analysis data: ", analysisData);
+    console.log("Analysis data: ", analysisData)
   }
 
-// Modified fetchClaimData function
-useEffect(() => {
-  async function fetchClaimData() {
+  // Modified fetchClaimData function
+  useEffect(() => {
+    async function fetchClaimData() {
+      try {
+        // Fetch claim details
+        const claimResponse = await fetch(`/api/claims/${claimId}`)
+        if (!claimResponse.ok) {
+          throw new Error(`Failed to fetch claim: ${claimResponse.statusText}`)
+        }
+        const claimData = await claimResponse.json()
+        setClaim(claimData)
+
+        // Fetch documents
+        const documentsResponse = await fetch(`/api/documents?claim_id=${claimId}`)
+        if (!documentsResponse.ok) {
+          throw new Error(`Failed to fetch documents: ${documentsResponse.statusText}`)
+        }
+        const documentsData = await documentsResponse.json()
+        setDocuments(documentsData || [])
+
+        // Fetch images
+        const imagesResponse = await fetch(`/api/images?claim_id=${claimId}`)
+        if (!imagesResponse.ok) {
+          throw new Error(`Failed to fetch images: ${imagesResponse.statusText}`)
+        }
+        const imagesData = await imagesResponse.json()
+        setImages(imagesData || [])
+
+        // Fetch videos
+        const videosResponse = await fetch(`/api/videos?claim_id=${claimId}`)
+        if (!videosResponse.ok) {
+          throw new Error(`Failed to fetch videos: ${videosResponse.statusText}`)
+        }
+        const videosData = await videosResponse.json()
+        setVideos(videosData || [])
+      } catch (error) {
+        console.error("Error fetching claim data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (claimId) {
+      fetchClaimData()
+    }
+  }, [claimId])
+
+  // Call processDocumentsWithLLM when claim data is loaded
+  useEffect(() => {
+    if (claim && !documentVerificationComplete && !llmLoading) {
+      processDocumentsWithLLM()
+    }
+  }, [claim, documentVerificationComplete, llmLoading])
+
+  // Modified updateClaimStatus function
+  const updateClaimStatus = async (status: "approved" | "rejected" | "analyzed") => {
+    if (!claim) return
+
+    setIsUpdating(true)
+    setUpdateMessage(null)
+
     try {
-      // Fetch claim details
-      const claimResponse = await fetch(`/api/claims/${claimId}`);
-      if (!claimResponse.ok) {
-        throw new Error(`Failed to fetch claim: ${claimResponse.statusText}`);
-      }
-      const claimData = await claimResponse.json();
-      setClaim(claimData);
-
-      // Fetch documents
-      const documentsResponse = await fetch(`/api/documents?claim_id=${claimId}`);
-      if (!documentsResponse.ok) {
-        throw new Error(`Failed to fetch documents: ${documentsResponse.statusText}`);
-      }
-      const documentsData = await documentsResponse.json();
-      setDocuments(documentsData || []);
-
-      // Fetch images
-      const imagesResponse = await fetch(`/api/images?claim_id=${claimId}`);
-      if (!imagesResponse.ok) {
-        throw new Error(`Failed to fetch images: ${imagesResponse.statusText}`);
-      }
-      const imagesData = await imagesResponse.json();
-      setImages(imagesData || []);
-
-      // Fetch videos
-      const videosResponse = await fetch(`/api/videos?claim_id=${claimId}`);
-      if (!videosResponse.ok) {
-        throw new Error(`Failed to fetch videos: ${videosResponse.statusText}`);
-      }
-      const videosData = await videosResponse.json();
-      setVideos(videosData || []);
-    } catch (error) {
-      console.error("Error fetching claim data:", error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (claimId) {
-    fetchClaimData();
-  }
-}, [claimId]);
-
-// Modified updateClaimStatus function
-const updateClaimStatus = async (status: "approved" | "rejected" | "analyzed") => {
-  if (!claim) return;
-
-  setIsUpdating(true);
-  setUpdateMessage(null);
-
-  try {
-    const response = await fetch(`/api/claims/${claim.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ status }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update claim status: ${response.statusText}`);
-    }
-
-    // Update local state
-    setClaim({
-      ...claim,
-      status,
-    });
-
-    setUpdateMessage({
-      type: "success",
-      text: status === "analyzed" ? "Claim has been marked as analyzed." : `Claim has been ${status} successfully.`,
-    });
-
-    // Redirect after approval/rejection
-    if (status === "approved" || status === "rejected") {
-      setTimeout(() => {
-        router.push(`/claims/${claimId}`);
-      }, 2000);
-    }
-  } catch (error) {
-    console.error("Error updating claim status:", error);
-    setUpdateMessage({
-      type: "error",
-      text: `Failed to update claim status. Please try again.`,
-    });
-  } finally {
-    setIsUpdating(false);
-  }
-};
-
-// Modified runAnalysis function
-const runAnalysis = async () => {
-  if (!claim) return;
-
-  setAnalysisInProgress(true);
-
-  try {
-    // Simulate analysis process
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    // Update claim score (simulated)
-    const claimScore = analysisData.overallScore;
-
-    const claimUpdateResponse = await fetch(`/api/claims/${claim.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        claim_score: claimScore,
-        status: "analyzed"
-      }),
-    });
-
-    if (!claimUpdateResponse.ok) {
-      throw new Error(`Failed to update claim score: ${claimUpdateResponse.statusText}`);
-    }
-
-    // Update local state
-    setClaim({
-      ...claim,
-      claim_score: claimScore,
-      status: "analyzed",
-    });
-
-    // Simulate updating image damage scores
-    const updatedImages = [...images];
-    for (let i = 0; i < updatedImages.length; i++) {
-      const damageScore = Math.round(Math.random() * 100) / 10;
-      
-      const imageUpdateResponse = await fetch(`/api/images/${updatedImages[i].id}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/claims/${claim.id}`, {
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ damage_score: damageScore }),
-      });
-      
-      if (!imageUpdateResponse.ok) {
-        console.warn(`Failed to update image score for image ${updatedImages[i].id}`);
+        body: JSON.stringify({ status }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to update claim status: ${response.statusText}`)
       }
 
-      updatedImages[i].damage_score = damageScore;
-    }
+      // Update local state
+      setClaim({
+        ...claim,
+        status,
+      })
 
-    setImages(updatedImages);
-    setAnalysisComplete(true);
-  } catch (error) {
-    console.error("Error running analysis:", error);
-  } finally {
-    setAnalysisInProgress(false);
+      setUpdateMessage({
+        type: "success",
+        text: status === "analyzed" ? "Claim has been marked as analyzed." : `Claim has been ${status} successfully.`,
+      })
+
+      // Redirect after approval/rejection
+      if (status === "approved" || status === "rejected") {
+        setTimeout(() => {
+          router.push(`/claims/${claimId}`)
+        }, 2000)
+      }
+    } catch (error) {
+      console.error("Error updating claim status:", error)
+      setUpdateMessage({
+        type: "error",
+        text: `Failed to update claim status. Please try again.`,
+      })
+    } finally {
+      setIsUpdating(false)
+    }
   }
-};
+
+  // Modified runAnalysis function
+  const runAnalysis = async () => {
+    if (!claim) return
+
+    setAnalysisInProgress(true)
+
+    try {
+      // Simulate analysis process
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+
+      // Update claim score (simulated)
+      const claimScore = analysisData.overallScore
+
+      const claimUpdateResponse = await fetch(`/api/claims/${claim.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          claim_score: claimScore,
+          status: "analyzed",
+        }),
+      })
+
+      if (!claimUpdateResponse.ok) {
+        throw new Error(`Failed to update claim score: ${claimUpdateResponse.statusText}`)
+      }
+
+      // Update local state
+      setClaim({
+        ...claim,
+        claim_score: claimScore,
+        status: "analyzed",
+      })
+
+      // Simulate updating image damage scores
+      const updatedImages = [...images]
+      for (let i = 0; i < updatedImages.length; i++) {
+        const damageScore = Math.round(Math.random() * 100) / 10
+
+        const imageUpdateResponse = await fetch(`/api/images/${updatedImages[i].id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ damage_score: damageScore }),
+        })
+
+        if (!imageUpdateResponse.ok) {
+          console.warn(`Failed to update image score for image ${updatedImages[i].id}`)
+        }
+
+        updatedImages[i].damage_score = damageScore
+      }
+
+      setImages(updatedImages)
+      setAnalysisComplete(true)
+    } catch (error) {
+      console.error("Error running analysis:", error)
+    } finally {
+      setAnalysisInProgress(false)
+    }
+  }
 
   const canApproveOrReject = () => {
     return claim && (claim.status === "submitted" || claim.status === "analyzed")
@@ -514,28 +617,27 @@ const runAnalysis = async () => {
   }
 
   const runCarModelIdentification = async (imageUrl: string) => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
 
     try {
       const response = await fetch("http://127.0.0.1:8000/predict_car_model/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image_url: imageUrl }),
-      });
+      })
 
-      if (!response.ok) throw new Error("Failed to fetch model prediction");
+      if (!response.ok) throw new Error("Failed to fetch model prediction")
 
-      const data = await response.json();
-      setDetectedModel(data.car_model);
-      setConfidence(data.confidence);
+      const data = await response.json()
+      setDetectedModel(data.car_model)
+      setConfidence(data.confidence)
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      setError(err.message || "Something went wrong")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
-
+  }
 
   if (loading) {
     return (
@@ -678,40 +780,45 @@ const runAnalysis = async () => {
               <nav className="space-y-1">
                 <button
                   onClick={() => setActiveSection("summary")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "summary" ? "bg-black text-white" : "hover:bg-gray-100"
-                    }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
+                    activeSection === "summary" ? "bg-black text-white" : "hover:bg-gray-100"
+                  }`}
                 >
                   <BarChart className="h-4 w-4 mr-2" />
                   Summary
                 </button>
                 <button
                   onClick={() => setActiveSection("documents")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "documents" ? "bg-black text-white" : "hover:bg-gray-100"
-                    }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
+                    activeSection === "documents" ? "bg-black text-white" : "hover:bg-gray-100"
+                  }`}
                 >
                   <FileCheck className="h-4 w-4 mr-2" />
                   Document Verification
                 </button>
                 <button
                   onClick={() => setActiveSection("car-model")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "car-model" ? "bg-black text-white" : "hover:bg-gray-100"
-                    }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
+                    activeSection === "car-model" ? "bg-black text-white" : "hover:bg-gray-100"
+                  }`}
                 >
                   <Car className="h-4 w-4 mr-2" />
                   Car Model Identification
                 </button>
                 <button
                   onClick={() => setActiveSection("damage")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "damage" ? "bg-black text-white" : "hover:bg-gray-100"
-                    }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
+                    activeSection === "damage" ? "bg-black text-white" : "hover:bg-gray-100"
+                  }`}
                 >
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Damage Assessment
                 </button>
                 <button
                   onClick={() => setActiveSection("recommendation")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${activeSection === "recommendation" ? "bg-black text-white" : "hover:bg-gray-100"
-                    }`}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
+                    activeSection === "recommendation" ? "bg-black text-white" : "hover:bg-gray-100"
+                  }`}
                 >
                   <Lightbulb className="h-4 w-4 mr-2" />
                   Recommendation
@@ -781,22 +888,17 @@ const runAnalysis = async () => {
                           </Suspense>
                         </Canvas>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <p className="text-sm text-gray-500">Model Accuracy</p>
-                          <p className="text-3xl font-bold">92%</p>
-                          <p className="text-xs text-gray-500 mt-1">Based on video evidence</p>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <p className="text-sm text-gray-500">Damage Points</p>
-                          <p className="text-3xl font-bold">4</p>
-                          <p className="text-xs text-gray-500 mt-1">Identified on 3D model</p>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <p className="text-sm text-gray-500">Collision Type</p>
-                          <p className="text-3xl font-bold">Frontal</p>
-                          <p className="text-xs text-gray-500 mt-1">45° angle from left</p>
-                        </div>
+                      <div className="flex justify-center mt-4">
+                        <button
+                          onClick={() => {
+                            const modal = document.getElementById("damage-analysis-modal") as HTMLDialogElement
+                            if (modal) modal.showModal()
+                          }}
+                          className="btn btn-primary flex items-center gap-2"
+                        >
+                          <BarChart className="h-4 w-4" />
+                          Analyze Damage Points
+                        </button>
                       </div>
                     </div>
                   )}
@@ -884,13 +986,9 @@ const runAnalysis = async () => {
                                   </tr>
                                   <tr>
                                     <td className="border p-2 font-medium">Incident Date</td>
-                                    <td className="border p-2">
-                                      11/2/2004
-                                    </td>
+                                    <td className="border p-2">11/2/2004</td>
                                     <td className="border p-2">-</td>
-                                    <td className="border p-2">
-                                      11/2/2004
-                                    </td>
+                                    <td className="border p-2">11/2/2004</td>
                                     <td className="border p-2">
                                       {analysisData.documentVerification.incidentDate.match ? (
                                         <CheckCircle className="h-5 w-5 text-green-500" />
@@ -955,8 +1053,8 @@ const runAnalysis = async () => {
                             </h3>
                             <p className="text-blue-800">
                               {analysisData.documentVerification.carModel.match &&
-                                analysisData.documentVerification.ownerName.match &&
-                                analysisData.documentVerification.policyMaturity.isValid
+                              analysisData.documentVerification.ownerName.match &&
+                              analysisData.documentVerification.policyMaturity.isValid
                                 ? "All documents are consistent and authentic. The car model, owner information, and incident dates match across all submitted documents. The insurance policy is valid and covers the incident date."
                                 : "There are some inconsistencies in the documents. Please review the information carefully before proceeding."}
                             </p>
@@ -1164,12 +1262,13 @@ const runAnalysis = async () => {
                                 <div className="mb-3">
                                   <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                                   <span
-                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
-                                      ? "bg-red-100 text-red-800"
-                                      : part.claimedSeverity === "moderate"
-                                        ? "bg-amber-100 text-amber-800"
-                                        : "bg-yellow-100 text-yellow-800"
-                                      }`}
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                      part.claimedSeverity === "severe"
+                                        ? "bg-red-100 text-red-800"
+                                        : part.claimedSeverity === "moderate"
+                                          ? "bg-amber-100 text-amber-800"
+                                          : "bg-yellow-100 text-yellow-800"
+                                    }`}
                                   >
                                     {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
                                   </span>
@@ -1177,12 +1276,13 @@ const runAnalysis = async () => {
                                 <div className="mb-3">
                                   <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                                   <span
-                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
-                                      ? "bg-red-100 text-red-800"
-                                      : part.assessedSeverity === "moderate"
-                                        ? "bg-amber-100 text-amber-800"
-                                        : "bg-yellow-100 text-yellow-800"
-                                      }`}
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                      part.assessedSeverity === "severe"
+                                        ? "bg-red-100 text-red-800"
+                                        : part.assessedSeverity === "moderate"
+                                          ? "bg-amber-100 text-amber-800"
+                                          : "bg-yellow-100 text-yellow-800"
+                                    }`}
                                   >
                                     {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
                                   </span>
@@ -1484,8 +1584,8 @@ const runAnalysis = async () => {
                       </h3>
                       <p className="text-blue-800">
                         {analysisData.documentVerification.carModel.match &&
-                          analysisData.documentVerification.ownerName.match &&
-                          analysisData.documentVerification.policyMaturity.isValid
+                        analysisData.documentVerification.ownerName.match &&
+                        analysisData.documentVerification.policyMaturity.isValid
                           ? "All documents are consistent and authentic. The car model, owner information, and incident dates match across all submitted documents. The insurance policy is valid and covers the incident date."
                           : "There are some inconsistencies in the documents. Please review the information carefully before proceeding."}
                       </p>
@@ -1656,12 +1756,13 @@ const runAnalysis = async () => {
                           <div className="mb-3">
                             <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
-                                ? "bg-red-100 text-red-800"
-                                : part.claimedSeverity === "moderate"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                                }`}
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                part.claimedSeverity === "severe"
+                                  ? "bg-red-100 text-red-800"
+                                  : part.claimedSeverity === "moderate"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                              }`}
                             >
                               {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
                             </span>
@@ -1669,12 +1770,13 @@ const runAnalysis = async () => {
                           <div className="mb-3">
                             <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
-                                ? "bg-red-100 text-red-800"
-                                : part.assessedSeverity === "moderate"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                                }`}
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                part.assessedSeverity === "severe"
+                                  ? "bg-red-100 text-red-800"
+                                  : part.assessedSeverity === "moderate"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                              }`}
                             >
                               {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
                             </span>
@@ -1829,6 +1931,39 @@ const runAnalysis = async () => {
       </div>
 
       <Footer />
+      {/* Damage Analysis Modal */}
+      <dialog id="damage-analysis-modal" className="modal modal-bottom sm:modal-middle w-full h-full max-w-none">
+        <div className="modal-box max-w-none w-[95vw] h-[90vh] p-0 bg-white rounded-lg shadow-2xl">
+          <div className="flex justify-between items-center p-4 border-b">
+            <h3 className="font-bold text-xl text-gray-800">3D Damage Analysis</h3>
+            <button
+              className="btn btn-sm btn-circle btn-ghost hover:bg-gray-200"
+              onClick={() => {
+                const modal = document.getElementById("damage-analysis-modal") as HTMLDialogElement
+                if (modal) modal.close()
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="h-[calc(90vh-120px)] bg-black">
+            <DamageAnalysis />
+          </div>
+
+          <div className="p-4 border-t bg-gray-50">
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                const modal = document.getElementById("damage-analysis-modal") as HTMLDialogElement
+                if (modal) modal.close()
+              }}
+            >
+              Back to Claim
+            </button>
+          </div>
+        </div>
+      </dialog>
     </div>
   )
 }
