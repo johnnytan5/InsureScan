@@ -50,6 +50,9 @@ export default function ClaimAnalyzePage() {
   const [activeSection, setActiveSection] = useState("summary")
   const [analysisInProgress, setAnalysisInProgress] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
+  const [detectedModel, setDetectedModel] = useState<string | null>(null)
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null)
 
   // Expanded sections state
   const [expandedSections, setExpandedSections] = useState({
@@ -166,6 +169,14 @@ export default function ClaimAnalyzePage() {
 
         if (imagesError) throw imagesError
         setImages(imagesData || [])
+
+        if (imagesData && imagesData.length > 0) {
+          const firstImageUrl = imagesData[0].file_url;
+          if (firstImageUrl) {
+            runCarModelIdentification(firstImageUrl);
+          }
+        }
+
 
         // Fetch videos
         const { data: videosData, error: videosError } = await supabaseClient
@@ -284,6 +295,30 @@ export default function ClaimAnalyzePage() {
       [section]: !expandedSections[section],
     })
   }
+
+  const runCarModelIdentification = async (imageUrl: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/predict_car_model/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: imageUrl }),
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch model prediction");
+
+      const data = await response.json();
+      setDetectedModel(data.car_model);
+      setConfidence(data.confidence);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -702,14 +737,29 @@ export default function ClaimAnalyzePage() {
                               </div>
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Detected Model</p>
-                                <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
+                                {loading ? (
+                                  <p className="text-sm text-gray-600 italic">Analyzing...</p>
+                                ) : error ? (
+                                  <p className="text-sm text-red-500">{error}</p>
+                                ) : detectedModel ? (
+                                  <p className="font-bold text-lg">{detectedModel}</p>
+                                ) : (
+                                  <p className="text-sm text-gray-400">Not available</p>
+                                )}
                               </div>
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Confidence</p>
-                                <p className="font-bold text-lg">
-                                  {(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%
-                                </p>
+                                {loading ? (
+                                  <p className="text-sm text-gray-600 italic">Processing...</p>
+                                ) : error ? (
+                                  <p className="text-sm text-red-500">-</p>
+                                ) : confidence !== null ? (
+                                  <p className="font-bold text-lg">{(confidence * 100).toFixed(1)}%</p>
+                                ) : (
+                                  <p className="text-sm text-gray-400">Not available</p>
+                                )}
                               </div>
+
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Match</p>
                                 {analysisData.carModelIdentification.match ? (
@@ -850,10 +900,10 @@ export default function ClaimAnalyzePage() {
                                   <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                                   <span
                                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
-                                        ? "bg-red-100 text-red-800"
-                                        : part.claimedSeverity === "moderate"
-                                          ? "bg-amber-100 text-amber-800"
-                                          : "bg-yellow-100 text-yellow-800"
+                                      ? "bg-red-100 text-red-800"
+                                      : part.claimedSeverity === "moderate"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-yellow-100 text-yellow-800"
                                       }`}
                                   >
                                     {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
@@ -863,10 +913,10 @@ export default function ClaimAnalyzePage() {
                                   <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                                   <span
                                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
-                                        ? "bg-red-100 text-red-800"
-                                        : part.assessedSeverity === "moderate"
-                                          ? "bg-amber-100 text-amber-800"
-                                          : "bg-yellow-100 text-yellow-800"
+                                      ? "bg-red-100 text-red-800"
+                                      : part.assessedSeverity === "moderate"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-yellow-100 text-yellow-800"
                                       }`}
                                   >
                                     {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
@@ -1181,24 +1231,26 @@ export default function ClaimAnalyzePage() {
                         </div>
                         <div>
                           <p className="text-sm text-gray-500 mb-1">Detected Model</p>
-                          <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
+                          {loading ? (
+                            <p className="text-sm text-gray-600 italic">Analyzing...</p>
+                          ) : error ? (
+                            <p className="text-sm text-red-500">{error}</p>
+                          ) : detectedModel ? (
+                            <p className="font-bold text-lg">{detectedModel}</p>
+                          ) : (
+                            <p className="text-sm text-gray-400">Not available</p>
+                          )}
                         </div>
                         <div>
                           <p className="text-sm text-gray-500 mb-1">Confidence</p>
-                          <p className="font-bold text-lg">
-                            {(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500 mb-1">Match</p>
-                          {analysisData.carModelIdentification.match ? (
-                            <span className="text-green-600 flex items-center">
-                              <CheckCircle className="h-4 w-4 mr-1" /> Verified
-                            </span>
+                          {loading ? (
+                            <p className="text-sm text-gray-600 italic">Processing...</p>
+                          ) : error ? (
+                            <p className="text-sm text-red-500">-</p>
+                          ) : confidence !== null ? (
+                            <p className="font-bold text-lg">{(confidence * 100).toFixed(1)}%</p>
                           ) : (
-                            <span className="text-red-600 flex items-center">
-                              <AlertCircle className="h-4 w-4 mr-1" /> Mismatch
-                            </span>
+                            <p className="text-sm text-gray-400">Not available</p>
                           )}
                         </div>
                       </div>
@@ -1316,10 +1368,10 @@ export default function ClaimAnalyzePage() {
                             <p className="text-sm text-gray-500 mb-1">Claimed Severity</p>
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.claimedSeverity === "severe"
-                                  ? "bg-red-100 text-red-800"
-                                  : part.claimedSeverity === "moderate"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-yellow-100 text-yellow-800"
+                                ? "bg-red-100 text-red-800"
+                                : part.claimedSeverity === "moderate"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-yellow-100 text-yellow-800"
                                 }`}
                             >
                               {part.claimedSeverity.charAt(0).toUpperCase() + part.claimedSeverity.slice(1)}
@@ -1329,10 +1381,10 @@ export default function ClaimAnalyzePage() {
                             <p className="text-sm text-gray-500 mb-1">Assessed Severity</p>
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${part.assessedSeverity === "severe"
-                                  ? "bg-red-100 text-red-800"
-                                  : part.assessedSeverity === "moderate"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-yellow-100 text-yellow-800"
+                                ? "bg-red-100 text-red-800"
+                                : part.assessedSeverity === "moderate"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-yellow-100 text-yellow-800"
                                 }`}
                             >
                               {part.assessedSeverity.charAt(0).toUpperCase() + part.assessedSeverity.slice(1)}
