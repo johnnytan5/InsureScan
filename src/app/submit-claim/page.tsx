@@ -168,7 +168,6 @@ export default function SubmitClaimPage() {
         ])
       }
 
-      //add code here
       // Trigger background document processing
       const result = await triggerDocumentProcessing(claimId)
 
@@ -209,6 +208,33 @@ export default function SubmitClaimPage() {
                 <div className="space-y-2">
                   <label htmlFor="claim-name" className="text-sm font-medium">
                     Claim Name
+                  </label>
+                  <input
+                    id="claim-name"
+                    value={claimName}
+                    onChange={(e) => setClaimName(e.target.value)}
+                    placeholder="Enter a name for this claim"
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="claim-name" className="text-sm font-medium">
+                    Car Model
+                  </label>
+                  <input
+                    id="claim-name"
+                    value={claimName}
+                    onChange={(e) => setClaimName(e.target.value)}
+                    placeholder="Enter a name for this claim"
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="claim-name" className="text-sm font-medium">
+                    Policy Holder
                   </label>
                   <input
                     id="claim-name"

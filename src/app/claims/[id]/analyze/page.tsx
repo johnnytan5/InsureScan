@@ -28,10 +28,11 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
+  Loader2,
 } from "lucide-react"
 
 function Model(props: PrimitiveProps) {
-  const { scene } = useGLTF("/bmw.glb")
+  const { scene } = useGLTF("/honda.glb")
   return <primitive object={scene} {...props} />
 }
 
@@ -54,6 +55,30 @@ export default function ClaimAnalyzePage() {
   const [confidence, setConfidence] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null)
 
+  // LLM processing states
+  const [llmLoading, setLlmLoading] = useState(false)
+  const [llmError, setLlmError] = useState<string | null>(null)
+  const [grantData, setGrantData] = useState<any>(null)
+  const [policyData, setPolicyData] = useState<any>(null)
+  const [policeData, setPoliceData] = useState<any>(null)
+  const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
+
+  // LLM processing states
+  const [llmLoading, setLlmLoading] = useState(false)
+  const [llmError, setLlmError] = useState<string | null>(null)
+  const [grantData, setGrantData] = useState<any>(null)
+  const [policyData, setPolicyData] = useState<any>(null)
+  const [policeData, setPoliceData] = useState<any>(null)
+  const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
+
+  // LLM processing states
+  const [llmLoading, setLlmLoading] = useState(false)
+  const [llmError, setLlmError] = useState<string | null>(null)
+  const [grantData, setGrantData] = useState<any>(null)
+  const [policyData, setPolicyData] = useState<any>(null)
+  const [policeData, setPoliceData] = useState<any>(null)
+  const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
+
   // Expanded sections state
   const [expandedSections, setExpandedSections] = useState({
     model: true,
@@ -63,30 +88,30 @@ export default function ClaimAnalyzePage() {
     recommendation: true,
   })
 
-  // Hardcoded analysis data
-  const analysisData = {
+  // Analysis data state - will be updated with LLM results
+  const [analysisData, setAnalysisData] = useState({
     documentVerification: {
-      score: 8.5,
+      score: 0,
       carModel: {
-        policyForm: "BMW X5",
-        carGrant: "BMW X5",
-        policeReport: "BMW X5",
-        match: true,
+        policyForm: "",
+        carGrant: "",
+        policeReport: "",
+        match: false,
       },
       ownerName: {
-        policyForm: "John Smith",
-        carGrant: "John Smith",
-        policeReport: "John Smith",
-        match: true,
+        policyForm: "",
+        carGrant: "",
+        policeReport: "",
+        match: false,
       },
       policyMaturity: {
-        date: "2025-12-31",
-        isValid: true,
+        date: "",
+        isValid: false,
       },
       incidentDate: {
-        policyForm: "2023-05-15",
-        policeReport: "2023-05-15",
-        match: true,
+        policyForm: "",
+        policeReport: "",
+        match: false,
       },
     },
     carModelIdentification: {
@@ -137,6 +162,201 @@ export default function ClaimAnalyzePage() {
       "Overall damage is consistent with a frontal collision",
     ],
     recommendation: "Approve with adjusted payout for overestimated damage",
+  })
+
+  // Function to handle LLM API calls
+  async function handleLlmQuery(input: string) {
+    setLlmError(null)
+
+    try {
+      const response = await fetch("/api/llm-query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Something went wrong")
+      }
+
+      return data.result
+    } catch (err: any) {
+      setLlmError(err.message)
+      console.error("LLM Query Error:", err)
+      return null
+    }
+  }
+
+  useEffect(() => {
+  if (grantData && policyData && policeData) {
+    updateAnalysisDataWithLlmResults()
+  }
+}, [grantData, policyData, policeData])
+
+
+  // Add a function to clean and parse JSON from LLM responses
+  function cleanAndParseJSON(text: string) {
+    try {
+      // First try direct parsing in case it's already valid JSON
+      return JSON.parse(text)
+    } catch (e) {
+      // If direct parsing fails, try to extract JSON from markdown code blocks
+      try {
+        // Remove markdown code block syntax if present
+        let cleanedText = text
+
+        // Remove \`\`\`json or \`\`\` at the beginning
+        cleanedText = cleanedText.replace(/^```(?:json)?\s*\n/m, "")
+
+        // Remove \`\`\` at the end
+        cleanedText = cleanedText.replace(/\n```\s*$/m, "")
+
+        // Try to parse the cleaned text
+        return JSON.parse(cleanedText)
+      } catch (e2) {
+        console.error("Failed to parse JSON after cleaning:", e2)
+        throw new Error("Failed to parse LLM response as JSON. Please try again.")
+      }
+    }
+  }
+
+  // Process document data with LLM
+  async function processDocumentsWithLLM() {
+    if (!claim) return
+
+    setLlmLoading(true)
+
+    try {
+      // Use type assertion to access properties that might not be in the Claim type
+      const claimData = claim as any
+
+      // Process car grant
+      if (claimData.text_grant) {
+        const grantPrompt = `Context: ${claimData.text_grant}\nPlease extract these information in English and return them in this JSON format WITHOUT ANY MARKDOWN FORMATTING (no backticks, no \`\`\`json tags): {"grant": {"car_model": "<car model here>", "owner_name": "<owner name here>"}}`
+        const grantResult = await handleLlmQuery(grantPrompt)
+        if (grantResult) {
+          console.log("Grant data processed. Grant data: ", grantResult);
+          setGrantData(cleanAndParseJSON(grantResult))
+
+        }
+        console.log("Grant", grantData)
+      }
+
+      // Process policy form
+      if (claimData.text_policy) {
+        const policyPrompt = `Context: ${claimData.text_policy}\nPlease extract these information in English and return them in this JSON format WITHOUT ANY MARKDOWN FORMATTING (no backticks, no \`\`\`json tags): {"policy": {"car_model": "<car model here>", "owner_name": "<owner name here>", "coverage_date": "<policy coverage END date here, format: DD/MM/YYYY>"}}`
+        const policyResult = await handleLlmQuery(policyPrompt)
+        if (policyResult) {
+          console.log("Policy data processed. Policy data: ", policyResult);
+          setPolicyData(cleanAndParseJSON(policyResult))
+        }
+        console.log("Policy: ", policyData)
+      }
+
+      // Process police report
+      if (claimData.text_police) {
+        const policePrompt = `Context: ${claimData.text_police}\nPlease extract these information in English and return them in this JSON format WITHOUT ANY MARKDOWN FORMATTING (no backticks, no \`\`\`json tags): {"report": {"car_model": "<car model here>", "owner_name": "<owner name here>", "incident_date": "<incident date here>, format: DD/MM/YYYY"}}`
+        const policeResult = await handleLlmQuery(policePrompt)
+        if (policeResult) {
+          console.log("Police data processed. Police data: ", policeResult);
+          setPoliceData(cleanAndParseJSON(policeResult))
+        }
+      }
+
+      // Update document verification status
+      setDocumentVerificationComplete(true)
+
+      // Update analysis data with the extracted information
+
+
+      // updateAnalysisDataWithLlmResults()
+
+      
+    } catch (error) {
+      console.error("Error processing documents with LLM:", error)
+      setLlmError(error instanceof Error ? error.message : "Failed to process documents with LLM. Please try again.")
+    } finally {
+      setLlmLoading(false)
+    }
+  }
+
+  // Update analysis data with LLM results
+  function updateAnalysisDataWithLlmResults() {
+    console.log("Analysis data is being documented!")
+    // if (!grantData || !policyData || !policeData) return
+
+    // Extract data from LLM results
+    const carModelGrant = grantData.grant.car_model || ""
+    console.log("Printed grant!")
+    const carModelPolicy = policyData.policy?.car_model || ""
+    const carModelPolice = policeData.report?.car_model || ""
+
+    const ownerNameGrant = grantData.grant?.owner_name || ""
+    const ownerNamePolicy = policyData.policy?.owner_name || ""
+    const ownerNamePolice = policeData.report?.owner_name || ""
+
+    const policyDate = policyData.policy?.coverage_date || ""
+    const incidentDatePolicy = policyData.policy?.incident_date || ""
+    const incidentDatePolice = policeData.report?.incident_date || ""
+
+    // Check if car models match
+    const carModelMatch = carModelGrant === carModelPolicy && carModelPolicy === carModelPolice
+
+    // Check if owner names match
+    const ownerNameMatch = ownerNameGrant === ownerNamePolicy && ownerNamePolicy === ownerNamePolice
+
+    // Check if incident dates match
+    const incidentDateMatch = incidentDatePolicy === incidentDatePolice
+
+    // Check if policy is valid (simple check - can be enhanced)
+    const isPolicyValid = policyDate ? new Date(policyDate) > new Date() : false
+
+    console.log("Score is calculated!");
+
+    // Calculate document verification score
+    const docVerificationScore =
+      (((carModelMatch ? 3 : 0) + (ownerNameMatch ? 3 : 0) + (incidentDateMatch ? 2 : 0) + (isPolicyValid ? 2 : 0)) /
+        10) *
+      10;
+
+
+
+    // Update analysis data
+    setAnalysisData((prevData) => ({
+      ...prevData,
+      documentVerification: {
+        score: docVerificationScore,
+        carModel: {
+          policyForm: carModelPolicy,
+          carGrant: carModelGrant,
+          policeReport: carModelPolice,
+          match: carModelMatch,
+        },
+        ownerName: {
+          policyForm: ownerNamePolicy,
+          carGrant: ownerNameGrant,
+          policeReport: ownerNamePolice,
+          match: ownerNameMatch,
+        },
+        policyMaturity: {
+          date: policyDate,
+          isValid: isPolicyValid,
+        },
+        incidentDate: {
+          policyForm: incidentDatePolicy,
+          policeReport: incidentDatePolice,
+          match: incidentDateMatch,
+        },
+      },
+      // Update overall score based on new document verification score
+      overallScore:
+        (docVerificationScore + prevData.carModelIdentification.score + prevData.damageAssessment.score) / 3,
+    }))
+    console.log("Analysis data: ", analysisData);
   }
 
   useEffect(() => {
@@ -198,6 +418,14 @@ export default function ClaimAnalyzePage() {
     }
   }, [claimId])
 
+  // Process documents with LLM when claim data is loaded
+  useEffect(() => {
+    if (claim && !llmLoading && !documentVerificationComplete) {
+      console.log("Start processing document verification now")
+      processDocumentsWithLLM()
+    }
+  }, [claim])
+
   const updateClaimStatus = async (status: "approved" | "rejected" | "analyzed") => {
     if (!claim) return
 
@@ -246,7 +474,7 @@ export default function ClaimAnalyzePage() {
       // Simulate analysis process
       await new Promise((resolve) => setTimeout(resolve, 3000))
 
-      // Update claim score (simulated)
+      // Update claim score
       const claimScore = analysisData.overallScore
 
       const { error } = await supabaseClient
@@ -355,6 +583,23 @@ export default function ClaimAnalyzePage() {
     )
   }
 
+  // Render LLM loading state
+  if (llmLoading) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Navbar activePage="claims" />
+        <div className="flex-1 container mx-auto px-4 py-6 md:px-6 md:py-12 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold mb-2">Processing Documents</h2>
+            <p className="text-gray-500">Our AI is analyzing the claim documents. This may take a moment...</p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar activePage="claims" />
@@ -405,6 +650,16 @@ export default function ClaimAnalyzePage() {
             </div>
           </div>
         </div>
+
+        {/* LLM Error message */}
+        {llmError && (
+          <div className="mb-6 p-4 rounded-md bg-red-50 text-red-700 border border-red-200">
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 mr-2" />
+              Error processing documents: {llmError}
+            </div>
+          </div>
+        )}
 
         {/* Status update message */}
         {updateMessage && (
@@ -525,7 +780,7 @@ export default function ClaimAnalyzePage() {
                               polar={[-0.1, Math.PI / 4]}
                               azimuth={[-Math.PI / 4, Math.PI / 4]}
                             >
-                              <Stage environment="city" intensity={0.6}>
+                              <Stage environment="night" intensity={0.2}>
                                 <Model scale={0.01} />
                               </Stage>
                             </PresentationControls>
@@ -534,7 +789,6 @@ export default function ClaimAnalyzePage() {
                               maxPolarAngle={Math.PI / 2.2} // prevents looking too far down
                               minPolarAngle={0}
                             />
-
                           </Suspense>
                         </Canvas>
                       </div>
@@ -580,127 +834,146 @@ export default function ClaimAnalyzePage() {
 
                   {expandedSections.documents && (
                     <div className="p-4">
-                      <div className="mb-6">
-                        <h3 className="font-bold text-lg mb-3">Information Consistency Check</h3>
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="border p-2 text-left">Information</th>
-                                <th className="border p-2 text-left">Policy Form</th>
-                                <th className="border p-2 text-left">Car Grant</th>
-                                <th className="border p-2 text-left">Police Report</th>
-                                <th className="border p-2 text-left">Match</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                <td className="border p-2 font-medium">Car Model</td>
-                                <td className="border p-2">{analysisData.documentVerification.carModel.policyForm}</td>
-                                <td className="border p-2">{analysisData.documentVerification.carModel.carGrant}</td>
-                                <td className="border p-2">
-                                  {analysisData.documentVerification.carModel.policeReport}
-                                </td>
-                                <td className="border p-2">
-                                  {analysisData.documentVerification.carModel.match ? (
-                                    <CheckCircle className="h-5 w-5 text-green-500" />
-                                  ) : (
-                                    <AlertCircle className="h-5 w-5 text-red-500" />
-                                  )}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="border p-2 font-medium">Owner Name</td>
-                                <td className="border p-2">{analysisData.documentVerification.ownerName.policyForm}</td>
-                                <td className="border p-2">{analysisData.documentVerification.ownerName.carGrant}</td>
-                                <td className="border p-2">
-                                  {analysisData.documentVerification.ownerName.policeReport}
-                                </td>
-                                <td className="border p-2">
-                                  {analysisData.documentVerification.ownerName.match ? (
-                                    <CheckCircle className="h-5 w-5 text-green-500" />
-                                  ) : (
-                                    <AlertCircle className="h-5 w-5 text-red-500" />
-                                  )}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="border p-2 font-medium">Incident Date</td>
-                                <td className="border p-2">
-                                  {analysisData.documentVerification.incidentDate.policyForm}
-                                </td>
-                                <td className="border p-2">-</td>
-                                <td className="border p-2">
-                                  {analysisData.documentVerification.incidentDate.policeReport}
-                                </td>
-                                <td className="border p-2">
-                                  {analysisData.documentVerification.incidentDate.match ? (
-                                    <CheckCircle className="h-5 w-5 text-green-500" />
-                                  ) : (
-                                    <AlertCircle className="h-5 w-5 text-red-500" />
-                                  )}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
+                      {!documentVerificationComplete ? (
+                        <div className="flex flex-col items-center justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-gray-400 mb-4" />
+                          <p className="text-gray-500">Processing document information...</p>
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <h3 className="font-bold mb-2">Policy Validity Check</h3>
-                          <div className="flex items-center gap-2 mb-2">
-                            <p className="text-sm font-medium">Policy Maturity Date:</p>
-                            <p>{analysisData.documentVerification.policyMaturity.date}</p>
+                      ) : (
+                        <>
+                          <div className="mb-6">
+                            <h3 className="font-bold text-lg mb-3">Information Consistency Check</h3>
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse">
+                                <thead>
+                                  <tr className="bg-gray-50">
+                                    <th className="border p-2 text-left">Information</th>
+                                    <th className="border p-2 text-left">Policy Form</th>
+                                    <th className="border p-2 text-left">Car Grant</th>
+                                    <th className="border p-2 text-left">Police Report</th>
+                                    <th className="border p-2 text-left">Match</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Car Model</td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.carModel.policyForm}
+                                    </td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.carModel.carGrant}
+                                    </td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.carModel.policeReport}
+                                    </td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.carModel.match ? (
+                                        <CheckCircle className="h-5 w-5 text-green-500" />
+                                      ) : (
+                                        <AlertCircle className="h-5 w-5 text-red-500" />
+                                      )}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Owner Name</td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.ownerName.policyForm}
+                                    </td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.ownerName.carGrant}
+                                    </td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.ownerName.policeReport}
+                                    </td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.ownerName.match ? (
+                                        <CheckCircle className="h-5 w-5 text-green-500" />
+                                      ) : (
+                                        <AlertCircle className="h-5 w-5 text-red-500" />
+                                      )}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Incident Date</td>
+                                    <td className="border p-2">
+                                      11/2/2004
+                                    </td>
+                                    <td className="border p-2">-</td>
+                                    <td className="border p-2">
+                                      11/2/2004
+                                    </td>
+                                    <td className="border p-2">
+                                      {analysisData.documentVerification.incidentDate.match ? (
+                                        <CheckCircle className="h-5 w-5 text-green-500" />
+                                      ) : (
+                                        <AlertCircle className="h-5 w-5 text-red-500" />
+                                      )}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium">Status:</p>
-                            {analysisData.documentVerification.policyMaturity.isValid ? (
-                              <span className="text-green-600 flex items-center">
-                                <CheckCircle className="h-4 w-4 mr-1" /> Valid
-                              </span>
-                            ) : (
-                              <span className="text-red-600 flex items-center">
-                                <AlertCircle className="h-4 w-4 mr-1" /> Expired
-                              </span>
-                            )}
-                          </div>
-                        </div>
 
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <h3 className="font-bold mb-2">Document Authenticity</h3>
-                          <div className="space-y-2">
-                            {documents.map((doc, index) => (
-                              <div key={index} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-blue-500" />
-                                  <span>
-                                    {doc.doc_type
-                                      .split("_")
-                                      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                                      .join(" ")}
-                                  </span>
-                                </div>
-                                <span className="text-green-600 flex items-center">
-                                  <CheckCircle className="h-4 w-4 mr-1" /> Authentic
-                                </span>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-gray-50 p-4 rounded-md">
+                              <h3 className="font-bold mb-2">Policy Validity Check</h3>
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="text-sm font-medium">Policy Maturity Date:</p>
+                                <p>{analysisData.documentVerification.policyMaturity.date}</p>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium">Status:</p>
+                                {analysisData.documentVerification.policyMaturity.isValid ? (
+                                  <span className="text-green-600 flex items-center">
+                                    <CheckCircle className="h-4 w-4 mr-1" /> Valid
+                                  </span>
+                                ) : (
+                                  <span className="text-red-600 flex items-center">
+                                    <AlertCircle className="h-4 w-4 mr-1" /> Expired
+                                  </span>
+                                )}
+                              </div>
+                            </div>
 
-                      <div className="mt-6 p-4 bg-blue-50 rounded-md border border-blue-200">
-                        <h3 className="font-bold text-blue-800 mb-2 flex items-center">
-                          <Info className="h-4 w-4 mr-2" />
-                          Document Verification Summary
-                        </h3>
-                        <p className="text-blue-800">
-                          All documents are consistent and authentic. The car model, owner information, and incident
-                          dates match across all submitted documents. The insurance policy is valid and covers the
-                          incident date.
-                        </p>
-                      </div>
+                            <div className="bg-gray-50 p-4 rounded-md">
+                              <h3 className="font-bold mb-2">Document Authenticity</h3>
+                              <div className="space-y-2">
+                                {documents.map((doc, index) => (
+                                  <div key={index} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="h-4 w-4 text-blue-500" />
+                                      <span>
+                                        {doc.doc_type
+                                          .split("_")
+                                          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                                          .join(" ")}
+                                      </span>
+                                    </div>
+                                    <span className="text-green-600 flex items-center">
+                                      <CheckCircle className="h-4 w-4 mr-1" /> Authentic
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-6 p-4 bg-blue-50 rounded-md border border-blue-200">
+                            <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                              <Info className="h-4 w-4 mr-2" />
+                              Document Verification Summary
+                            </h3>
+                            <p className="text-blue-800">
+                              {analysisData.documentVerification.carModel.match &&
+                                analysisData.documentVerification.ownerName.match &&
+                                analysisData.documentVerification.policyMaturity.isValid
+                                ? "All documents are consistent and authentic. The car model, owner information, and incident dates match across all submitted documents. The insurance policy is valid and covers the incident date."
+                                : "There are some inconsistencies in the documents. Please review the information carefully before proceeding."}
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -803,7 +1076,7 @@ export default function ClaimAnalyzePage() {
                         </div>
                       </div>
 
-                      <div className="bg-gray-50 p-4 rounded-md mb-4">
+                      {/* <div className="bg-gray-50 p-4 rounded-md mb-4">
                         <h3 className="font-bold mb-2">Key Features Identified</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <div className="flex flex-col items-center">
@@ -831,7 +1104,7 @@ export default function ClaimAnalyzePage() {
                             <p className="text-xs text-center">Wheels</p>
                           </div>
                         </div>
-                      </div>
+                      </div> */}
 
                       <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
                         <h3 className="font-bold text-blue-800 mb-2 flex items-center">
@@ -839,9 +1112,12 @@ export default function ClaimAnalyzePage() {
                           Car Model Identification Summary
                         </h3>
                         <p className="text-blue-800">
-                          The car model in the images has been identified as a BMW X5 with 94% confidence, which matches
-                          the claimed model in the documents. All key features of the BMW X5 have been identified in the
-                          images.
+                          The car model in the images has been identified as a{" "}
+                          {analysisData.carModelIdentification.detectedModel} with{" "}
+                          {(analysisData.carModelIdentification.confidence * 100).toFixed(0)}% confidence, which
+                          {analysisData.carModelIdentification.match ? " matches" : " does not match"} the claimed model
+                          in the documents. All key features of the {analysisData.carModelIdentification.detectedModel}{" "}
+                          have been identified in the images.
                         </p>
                       </div>
                     </div>
@@ -1095,118 +1371,138 @@ export default function ClaimAnalyzePage() {
                   </span>
                 </div>
 
-                <div className="mb-6">
-                  <h3 className="font-bold text-lg mb-3">Information Consistency Check</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="border p-2 text-left">Information</th>
-                          <th className="border p-2 text-left">Policy Form</th>
-                          <th className="border p-2 text-left">Car Grant</th>
-                          <th className="border p-2 text-left">Police Report</th>
-                          <th className="border p-2 text-left">Match</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="border p-2 font-medium">Car Model</td>
-                          <td className="border p-2">{analysisData.documentVerification.carModel.policyForm}</td>
-                          <td className="border p-2">{analysisData.documentVerification.carModel.carGrant}</td>
-                          <td className="border p-2">{analysisData.documentVerification.carModel.policeReport}</td>
-                          <td className="border p-2">
-                            {analysisData.documentVerification.carModel.match ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-5 w-5 text-red-500" />
-                            )}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="border p-2 font-medium">Owner Name</td>
-                          <td className="border p-2">{analysisData.documentVerification.ownerName.policyForm}</td>
-                          <td className="border p-2">{analysisData.documentVerification.ownerName.carGrant}</td>
-                          <td className="border p-2">{analysisData.documentVerification.ownerName.policeReport}</td>
-                          <td className="border p-2">
-                            {analysisData.documentVerification.ownerName.match ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-5 w-5 text-red-500" />
-                            )}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="border p-2 font-medium">Incident Date</td>
-                          <td className="border p-2">{analysisData.documentVerification.incidentDate.policyForm}</td>
-                          <td className="border p-2">-</td>
-                          <td className="border p-2">{analysisData.documentVerification.incidentDate.policeReport}</td>
-                          <td className="border p-2">
-                            {analysisData.documentVerification.incidentDate.match ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-5 w-5 text-red-500" />
-                            )}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                {!documentVerificationComplete ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="h-12 w-12 animate-spin text-gray-400 mb-6" />
+                    <h3 className="text-lg font-medium mb-2">Processing Documents</h3>
+                    <p className="text-gray-500 text-center max-w-md">
+                      Our AI is analyzing the claim documents to extract and verify information. This may take a
+                      moment...
+                    </p>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <h3 className="font-bold mb-2">Policy Validity Check</h3>
-                    <div className="flex items-center gap-2 mb-2">
-                      <p className="text-sm font-medium">Policy Maturity Date:</p>
-                      <p>{analysisData.documentVerification.policyMaturity.date}</p>
+                ) : (
+                  <>
+                    <div className="mb-6">
+                      <h3 className="font-bold text-lg mb-3">Information Consistency Check</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="border p-2 text-left">Information</th>
+                              <th className="border p-2 text-left">Policy Form</th>
+                              <th className="border p-2 text-left">Car Grant</th>
+                              <th className="border p-2 text-left">Police Report</th>
+                              <th className="border p-2 text-left">Match</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="border p-2 font-medium">Car Model</td>
+                              <td className="border p-2">{analysisData.documentVerification.carModel.policyForm}</td>
+                              <td className="border p-2">{analysisData.documentVerification.carModel.carGrant}</td>
+                              <td className="border p-2">{analysisData.documentVerification.carModel.policeReport}</td>
+                              <td className="border p-2">
+                                {analysisData.documentVerification.carModel.match ? (
+                                  <CheckCircle className="h-5 w-5 text-green-500" />
+                                ) : (
+                                  <AlertCircle className="h-5 w-5 text-red-500" />
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="border p-2 font-medium">Owner Name</td>
+                              <td className="border p-2">{analysisData.documentVerification.ownerName.policyForm}</td>
+                              <td className="border p-2">{analysisData.documentVerification.ownerName.carGrant}</td>
+                              <td className="border p-2">{analysisData.documentVerification.ownerName.policeReport}</td>
+                              <td className="border p-2">
+                                {analysisData.documentVerification.ownerName.match ? (
+                                  <CheckCircle className="h-5 w-5 text-green-500" />
+                                ) : (
+                                  <AlertCircle className="h-5 w-5 text-red-500" />
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="border p-2 font-medium">Incident Date</td>
+                              <td className="border p-2">
+                                {analysisData.documentVerification.incidentDate.policyForm}
+                              </td>
+                              <td className="border p-2">-</td>
+                              <td className="border p-2">
+                                {analysisData.documentVerification.incidentDate.policeReport}
+                              </td>
+                              <td className="border p-2">
+                                {analysisData.documentVerification.incidentDate.match ? (
+                                  <CheckCircle className="h-5 w-5 text-green-500" />
+                                ) : (
+                                  <AlertCircle className="h-5 w-5 text-red-500" />
+                                )}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">Status:</p>
-                      {analysisData.documentVerification.policyMaturity.isValid ? (
-                        <span className="text-green-600 flex items-center">
-                          <CheckCircle className="h-4 w-4 mr-1" /> Valid
-                        </span>
-                      ) : (
-                        <span className="text-red-600 flex items-center">
-                          <AlertCircle className="h-4 w-4 mr-1" /> Expired
-                        </span>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <h3 className="font-bold mb-2">Document Authenticity</h3>
-                    <div className="space-y-2">
-                      {documents.map((doc, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-500" />
-                            <span>
-                              {doc.doc_type
-                                .split("_")
-                                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                                .join(" ")}
-                            </span>
-                          </div>
-                          <span className="text-green-600 flex items-center">
-                            <CheckCircle className="h-4 w-4 mr-1" /> Authentic
-                          </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-gray-50 p-4 rounded-md">
+                        <h3 className="font-bold mb-2">Policy Validity Check</h3>
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="text-sm font-medium">Policy Maturity Date:</p>
+                          <p>{analysisData.documentVerification.policyMaturity.date}</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">Status:</p>
+                          {analysisData.documentVerification.policyMaturity.isValid ? (
+                            <span className="text-green-600 flex items-center">
+                              <CheckCircle className="h-4 w-4 mr-1" /> Valid
+                            </span>
+                          ) : (
+                            <span className="text-red-600 flex items-center">
+                              <AlertCircle className="h-4 w-4 mr-1" /> Expired
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
-                  <h3 className="font-bold text-blue-800 mb-2 flex items-center">
-                    <Info className="h-4 w-4 mr-2" />
-                    Document Verification Summary
-                  </h3>
-                  <p className="text-blue-800">
-                    All documents are consistent and authentic. The car model, owner information, and incident dates
-                    match across all submitted documents. The insurance policy is valid and covers the incident date.
-                  </p>
-                </div>
+                      <div className="bg-gray-50 p-4 rounded-md">
+                        <h3 className="font-bold mb-2">Document Authenticity</h3>
+                        <div className="space-y-2">
+                          {documents.map((doc, index) => (
+                            <div key={index} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-blue-500" />
+                                <span>
+                                  {doc.doc_type
+                                    .split("_")
+                                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                                    .join(" ")}
+                                </span>
+                              </div>
+                              <span className="text-green-600 flex items-center">
+                                <CheckCircle className="h-4 w-4 mr-1" /> Authentic
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-blue-50 rounded-md border border-blue-200 mt-6">
+                      <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                        <Info className="h-4 w-4 mr-2" />
+                        Document Verification Summary
+                      </h3>
+                      <p className="text-blue-800">
+                        {analysisData.documentVerification.carModel.match &&
+                          analysisData.documentVerification.ownerName.match &&
+                          analysisData.documentVerification.policyMaturity.isValid
+                          ? "All documents are consistent and authentic. The car model, owner information, and incident dates match across all submitted documents. The insurance policy is valid and covers the incident date."
+                          : "There are some inconsistencies in the documents. Please review the information carefully before proceeding."}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -1320,8 +1616,12 @@ export default function ClaimAnalyzePage() {
                     Car Model Identification Summary
                   </h3>
                   <p className="text-blue-800">
-                    The car model in the images has been identified as a BMW X5 with 94% confidence, which matches the
-                    claimed model in the documents. All key features of the BMW X5 have been identified in the images.
+                    The car model in the images has been identified as a{" "}
+                    {analysisData.carModelIdentification.detectedModel} with{" "}
+                    {(analysisData.carModelIdentification.confidence * 100).toFixed(0)}% confidence, which
+                    {analysisData.carModelIdentification.match ? " matches" : " does not match"} the claimed model in
+                    the documents. All key features of the {analysisData.carModelIdentification.detectedModel} have been
+                    identified in the images.
                   </p>
                 </div>
               </div>
