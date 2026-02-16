@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import logging
 
-from lib.database import execute_query, execute_insert_returning
+from lib.database_supabase import get_documents_by_claim, create_document as db_create_document
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,8 +21,7 @@ class DocumentCreate(BaseModel):
 async def get_documents(claim_id: int = Query(...)):
     """Get documents by claim_id"""
     try:
-        query = "SELECT * FROM documents WHERE claim_id = %s ORDER BY id"
-        documents = await execute_query(query, (claim_id,))
+        documents = await get_documents_by_claim(claim_id)
         return documents
     except Exception as e:
         logger.error(f"Error fetching documents: {e}")
@@ -33,14 +32,10 @@ async def get_documents(claim_id: int = Query(...)):
 async def create_document(document: DocumentCreate):
     """Create a new document record"""
     try:
-        query = """
-            INSERT INTO documents (claim_id, doc_type, file_url) 
-            VALUES (%s, %s, %s) 
-            RETURNING *
-        """
-        new_doc = await execute_insert_returning(
-            query, 
-            (document.claim_id, document.doc_type, document.file_url)
+        new_doc = await db_create_document(
+            document.claim_id, 
+            document.doc_type, 
+            document.file_url
         )
         return new_doc
     except Exception as e:

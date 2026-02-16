@@ -65,3 +65,4 @@ ENV/
 env/
 
 .mcp.json
+uploads/

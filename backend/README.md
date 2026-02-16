@@ -118,6 +118,9 @@ The API will be available at:
 - `POST /api/claims` - Create a new claim
 - `GET /api/claims/{id}` - Get claim details
 - `PATCH /api/claims/{id}` - Update claim
+- [DEPLOYMENT.md](../docs/DEPLOYMENT.md) - Deployment guide
+- [STRUCTURE.md](../docs/STRUCTURE.md) - Project structure
+- [API-TESTING.md](../docs/API-TESTING.md) - API testing examples
 - `DELETE /api/claims/{id}` - Delete claim
 - `GET /api/documents` - Get documents by claim_id
 - `POST /api/documents` - Create document record

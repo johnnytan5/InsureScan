@@ -11,7 +11,7 @@ InsureScan consists of two main services:
 
 - Node.js 18+ and npm
 - Python 3.11+
-- PostgreSQL database
+- Supabase account and project (see [SUPABASE_MIGRATION.md](SUPABASE_MIGRATION.md))
 - uv (Python package manager)
 
 ## Installation
@@ -46,12 +46,18 @@ Create `backend/.env` from `backend/.env.example`:
 ENVIRONMENT=development
 API_VERSION=v1
 
-# Database Configuration
-POSTGRES_USER=your_postgres_user
-POSTGRES_HOST=your_postgres_host
-POSTGRES_DB=your_postgres_database
-POSTGRES_PASSWORD=your_postgres_password
-POSTGRES_PORT=5432
+# Supabase Database Configuration
+# See SUPABASE_MIGRATION.md for setup instructions
+SUPABASE_DB_HOST=aws-0-us-east-1.pooler.supabase.com
+SUPABASE_DB_PORT=5432
+SUPABASE_DB_NAME=postgres
+SUPABASE_DB_USER=postgres.nkdequnbswxtzqdoosps
+SUPABASE_DB_PASSWORD=your_supabase_password
+SUPABASE_DB_SSLMODE=require
+
+SUPABASE_PROJECT_REF=nkdequnbswxtzqdoosps
+SUPABASE_URL=https://nkdequnbswxtzqdoosps.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # AI/ML API Configuration
 DASHSCOPE_API_KEY=your_dashscope_api_key

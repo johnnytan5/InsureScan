@@ -1,7 +1,7 @@
 """Application configuration"""
 
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     # Server Configuration
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    
+    # Supabase Configuration
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    
+    # LLM Configuration
+    DASHSCOPE_API_KEY: str = ""
+    BASE_URL: str = "http://localhost:8000"
     
     # CORS
     CORS_ORIGINS: List[str] = [
@@ -46,6 +54,16 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Allow extra fields like NEXT_PUBLIC_...
+
+    def model_post_init(self, __context):
+        """Fallback to NEXT_PUBLIC variables if SUPABASE vars are empty"""
+        if not self.SUPABASE_URL:
+            import os
+            self.SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
+        if not self.SUPABASE_ANON_KEY:
+            import os
+            self.SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY", "")
 
 
 settings = Settings()

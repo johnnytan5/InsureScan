@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
-from lib.database import execute_query, execute_insert_returning
+from lib.database_supabase import get_videos_by_claim, create_video as db_create_video
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -22,8 +22,7 @@ class VideoCreate(BaseModel):
 async def get_videos(claim_id: int = Query(...)):
     """Get videos by claim_id"""
     try:
-        query = "SELECT * FROM videos WHERE claim_id = %s ORDER BY id"
-        videos = await execute_query(query, (claim_id,))
+        videos = await get_videos_by_claim(claim_id)
         return videos
     except Exception as e:
         logger.error(f"Error fetching videos: {e}")
@@ -34,14 +33,10 @@ async def get_videos(claim_id: int = Query(...)):
 async def create_video(video: VideoCreate):
     """Create a new video record"""
     try:
-        query = """
-            INSERT INTO videos (claim_id, file_url, model_status) 
-            VALUES (%s, %s, %s) 
-            RETURNING *
-        """
-        new_video = await execute_insert_returning(
-            query, 
-            (video.claim_id, video.file_url, video.model_status)
+        new_video = await db_create_video(
+            video.claim_id, 
+            video.file_url, 
+            video.model_status
         )
         return new_video
     except Exception as e:
