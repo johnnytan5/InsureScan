@@ -1,36 +1,238 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InsureScan - Insurance Claim Processing Platform
+
+An insurance claim processing platform with Python FastAPI backend and Next.js frontend.
+
+## 📚 Documentation
+
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete deployment and running guide
+- **[STRUCTURE.md](./STRUCTURE.md)** - Detailed project structure and commands reference
+- **[API-TESTING.md](./API-TESTING.md)** - API testing examples and scenarios
+- **[Python Backend README](./backend/README.md)** - Backend API documentation
+
+## Project Structure
+
+```
+InsureScan/
+├── backend/                  # Python FastAPI backend
+│   ├── api/                 # FastAPI application & routers
+│   │   ├── main.py         # Main FastAPI app
+│   │   ├── config.py       # Configuration settings
+│   │   └── routers/        # API route handlers
+│   ├── lib/                # Backend utilities (database)
+│   ├── services/           # ML service implementations
+│   ├── models/             # ML models storage
+│   ├── utils/              # Python utilities
+│   ├── pyproject.toml      # Python dependencies (uv)
+│   └── .venv/              # Python virtual environment
+├── frontend/               # Next.js frontend application
+│   ├── src/
+│   │   ├── app/           # Next.js app router pages
+│   │   ├── components/    # React components
+│   │   └── lib/           # Frontend utilities and API client
+│   ├── package.json
+│   └── next.config.ts
+├── uploads/               # File storage directory
+└── Makefile               # Main development commands
+```
+
+## Tech Stack
+
+### Backend (Python)
+
+- **FastAPI** - Modern async Python web framework
+- **PostgreSQL** - Database (psycopg3)
+- **OpenAI** - LLM integration for OCR and queries
+- **PIL/OpenCV** - Image processing
+- **PyTorch/Transformers** - ML models
+- **uvicorn** - ASGI server
+
+### Frontend (Next.js)
+
+- **Next.js 15** - React framework with App Router
+- **React 19** - UI library
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **Three.js** - 3D visualizations
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js (v18 or higher)
+- Python (v3.11 or higher)
+- PostgreSQL database
+- uv (Python package manager)
+
+### Installation
+
+1. **Install all dependencies:**
+
+   ```bash
+   make install
+   ```
+
+   Or manually:
+
+   ```bash
+   # Install Node.js dependencies
+   npm install
+
+   # Install Python dependencies
+   cd backend
+   uv sync
+   ```
+
+2. **Set up environment variables:**
+
+   ```bash
+   # Backend environment
+   cp backend/.env.example backend/.env
+
+   # Frontend environment
+   cp frontend/.env.example frontend/.env
+   ```
+
+   Update the `.env` files with your database credentials, API keys, and other configuration.
+
+### Development
+
+**Quick Start - Run Everything:**
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+make dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+This starts:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Frontend on `http://localhost:3000`
+- Python Backend API on `http://localhost:8000`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Or run services individually:**
 
-## Learn More
+```bash
+# Backend only
+make backend
 
-To learn more about Next.js, take a look at the following resources:
+# Frontend only
+make frontend
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Available Make Commands:**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+make help      # Show all available commands
+make install   # Install all dependencies
+make clean     # Clean build artifacts and caches
+```
 
-## Deploy on Vercel
+### API Endpoints
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Once running, you can access:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:8000
+- **API Documentation:** http://localhost:8000/docs (Swagger UI)
+- **API Health Check:** http://localhost:8000/health
+
+### Key API Routes
+
+- `/api/claims` - CRUD operations for insurance claims
+- `/api/documents` - Document management
+- `/api/images` - Image upload and processing
+- `/api/videos` - Video upload and analysis
+- `/api/upload` - File upload endpoint
+- `/api/llm-query` - LLM queries
+- `/api/ocr` - Optical character recognition
+- `/api/ml/*` - ML damage detection
+- `/api/fraud` - Fraud detection
+
+### Production Build
+
+```bash
+# Build frontend
+cd frontend
+npm run build
+npm start
+```
+
+For Python backend, use production ASGI server:
+
+```bash
+cd backend
+uv run uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+## Features
+
+### Frontend
+
+- Next.js 15 with App Router
+- React 19 with TypeScript
+- Tailwind CSS styling
+- Radix UI components
+- Three.js 3D visualization
+- Responsive design
+
+### Backend (Python FastAPI)
+
+- RESTful API with async support
+- PostgreSQL database (psycopg3)
+- File upload handling
+- OCR with Vision LLM
+- LLM integration (Qwen models)
+- ML damage detection
+- Fraud analysis
+- CORS middleware
+- Auto-generated API docs (Swagger/ReDoc)
+
+## Environment Variables
+
+### Backend (.env)
+
+```env
+# Database
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=insurescan
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_password
+
+# API Keys
+DASHSCOPE_API_KEY=your_api_key
+BASE_URL=http://localhost:8000
+
+# Server
+PORT=8000
+HOST=0.0.0.0
+```
+
+### Frontend (.env.local)
+
+```env
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+```
+
+## License
+
+MIT
+
+---
+
+For more detailed information, see:
+
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment guide
+- [STRUCTURE.md](./STRUCTURE.md) - Project structure
+- [API-TESTING.md](./API-TESTING.md) - API testing examples
+
+1. Make changes in the appropriate package (frontend, backend, or shared)
+2. Update types in the shared package if needed
+3. Test both frontend and backend functionality
+4. Update documentation as necessary
+
+## Migration Notes
+
+- All API routes have been converted from Next.js API routes to Express.js routes
+- Frontend now uses an API client to communicate with the backend
+- Database connections are handled exclusively by the backend
+- File uploads now go through the Express.js backend
+- Shared types are available in the `shared` package for consistency

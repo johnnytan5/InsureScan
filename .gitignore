@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+/frontend/node_modules
+/backend/node_modules
+/shared/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -15,10 +18,14 @@
 
 # next.js
 /.next/
+/frontend/.next/
 /out/
 
 # production
 /build
+/frontend/build
+/backend/dist
+/shared/dist
 
 # misc
 .DS_Store
@@ -32,6 +39,12 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+/backend/.env
+/frontend/.env.local
+/frontend/.env.development.local
+/frontend/.env.test.local
+/frontend/.env.production.local
 
 # vercel
 .vercel
@@ -39,3 +52,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+.mcp.json
