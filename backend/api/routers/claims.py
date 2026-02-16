@@ -1,12 +1,15 @@
 """
 Claims API routes - CRUD operations for insurance claims
 """
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional
 import logging
+from typing import Optional
 
-from lib.database import execute_query, execute_query_one, execute_insert_returning, execute_update
+from fastapi import APIRouter, HTTPException, Query
+from lib.database_supabase import create_claim as db_create_claim
+from lib.database_supabase import delete_claim as db_delete_claim
+from lib.database_supabase import get_all_claims, get_claim_by_id
+from lib.database_supabase import update_claim as db_update_claim
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -27,13 +30,7 @@ class ClaimUpdate(BaseModel):
 async def get_claims(status: Optional[str] = Query(None)):
     """Get all claims with optional status filter"""
     try:
-        if status:
-            query = "SELECT * FROM claims WHERE status = %s ORDER BY created_at DESC"
-            claims = await execute_query(query, (status,))
-        else:
-            query = "SELECT * FROM claims ORDER BY created_at DESC"
-            claims = await execute_query(query)
-        
+        claims = await get_all_claims(status)
         return claims
     except Exception as e:
         logger.error(f"Error fetching claims: {e}")
@@ -44,12 +41,7 @@ async def get_claims(status: Optional[str] = Query(None)):
 async def create_claim(claim: ClaimCreate):
     """Create a new claim"""
     try:
-        query = """
-            INSERT INTO claims (name, status, created_at) 
-            VALUES (%s, %s, NOW()) 
-            RETURNING *
-        """
-        new_claim = await execute_insert_returning(query, (claim.name, claim.status))
+        new_claim = await db_create_claim(claim.name, claim.status)
         return new_claim
     except Exception as e:
         logger.error(f"Error creating claim: {e}")
@@ -60,8 +52,7 @@ async def create_claim(claim: ClaimCreate):
 async def get_claim(claim_id: int):
     """Get a specific claim by ID"""
     try:
-        query = "SELECT * FROM claims WHERE id = %s"
-        claim = await execute_query_one(query, (claim_id,))
+        claim = await get_claim_by_id(claim_id)
         
         if not claim:
             raise HTTPException(status_code=404, detail="Claim not found")
@@ -78,39 +69,25 @@ async def get_claim(claim_id: int):
 async def update_claim(claim_id: int, updates: ClaimUpdate):
     """Update a claim by ID"""
     try:
-        # Build dynamic UPDATE query
-        update_fields = []
-        params = []
+        # Build update dictionary from provided fields
+        update_data = {}
         
         if updates.status is not None:
-            update_fields.append("status = %s")
-            params.append(updates.status)
+            update_data["status"] = updates.status
         
         if updates.claim_score is not None:
-            update_fields.append("claim_score = %s")
-            params.append(updates.claim_score)
+            update_data["claim_score"] = updates.claim_score
         
         if updates.processed_at is not None:
-            update_fields.append("processed_at = %s")
-            params.append(updates.processed_at)
+            update_data["processed_at"] = updates.processed_at
         
-        if not update_fields:
+        if not update_data:
             raise HTTPException(status_code=400, detail="No valid fields to update")
         
-        params.append(claim_id)
-        query = f"""
-            UPDATE claims 
-            SET {', '.join(update_fields)} 
-            WHERE id = %s
-            RETURNING *
-        """
-        
-        updated_claim = await execute_insert_returning(query, tuple(params))
-        
-        if not updated_claim:
-            raise HTTPException(status_code=404, detail="Claim not found")
-        
+        updated_claim = await db_update_claim(claim_id, update_data)
         return updated_claim
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -119,19 +96,19 @@ async def update_claim(claim_id: int, updates: ClaimUpdate):
 
 
 @router.delete("/{claim_id}")
-async def delete_claim(claim_id: int):
+async def delete_claim_endpoint(claim_id: int):
     """Delete a claim by ID"""
     try:
-        # First check if claim exists
-        check_query = "SELECT id FROM claims WHERE id = %s"
-        claim = await execute_query_one(check_query, (claim_id,))
-        
+        # Check if claim exists first
+        claim = await get_claim_by_id(claim_id)
         if not claim:
             raise HTTPException(status_code=404, detail="Claim not found")
         
         # Delete the claim
-        delete_query = "DELETE FROM claims WHERE id = %s"
-        await execute_update(delete_query, (claim_id,))
+        success = await db_delete_claim(claim_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Claim not found")
         
         return {"message": "Claim deleted successfully"}
     except HTTPException:

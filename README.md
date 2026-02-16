@@ -4,9 +4,11 @@ An insurance claim processing platform with Python FastAPI backend and Next.js f
 
 ## 📚 Documentation
 
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete deployment and running guide
-- **[STRUCTURE.md](./STRUCTURE.md)** - Detailed project structure and commands reference
-- **[API-TESTING.md](./API-TESTING.md)** - API testing examples and scenarios
+- **[DEPLOYMENT.md](./docs/DEPLOYMENT.md)** - Complete deployment and running guide
+- **[SUPABASE_MIGRATION.md](./docs/SUPABASE_MIGRATION.md)** - Supabase database setup and migration guide
+- **[STRUCTURE.md](./docs/STRUCTURE.md)** - Detailed project structure and commands reference
+- **[API-TESTING.md](./docs/API-TESTING.md)** - API testing examples and scenarios
+- **[SUPABASE_QUICKSTART.md](./docs/SUPABASE_QUICKSTART.md)** - Quick start guide for Supabase
 - **[Python Backend README](./backend/README.md)** - Backend API documentation
 
 ## Project Structure
@@ -40,7 +42,7 @@ InsureScan/
 ### Backend (Python)
 
 - **FastAPI** - Modern async Python web framework
-- **PostgreSQL** - Database (psycopg3)
+- **Supabase (PostgreSQL)** - Cloud database with psycopg3
 - **OpenAI** - LLM integration for OCR and queries
 - **PIL/OpenCV** - Image processing
 - **PyTorch/Transformers** - ML models
@@ -60,7 +62,7 @@ InsureScan/
 
 - Node.js (v18 or higher)
 - Python (v3.11 or higher)
-- PostgreSQL database
+- Supabase account and project (free tier available)
 - uv (Python package manager)
 
 ### Installation
@@ -176,7 +178,7 @@ uv run uvicorn api.main:app --host 0.0.0.0 --port 8000
 ### Backend (Python FastAPI)
 
 - RESTful API with async support
-- PostgreSQL database (psycopg3)
+- Supabase PostgreSQL database (psycopg3)
 - File upload handling
 - OCR with Vision LLM
 - LLM integration (Qwen models)
@@ -189,13 +191,20 @@ uv run uvicorn api.main:app --host 0.0.0.0 --port 8000
 
 ### Backend (.env)
 
+See [SUPABASE_MIGRATION.md](./SUPABASE_MIGRATION.md) for detailed setup instructions.
+
 ```env
-# Database
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=insurescan
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_password
+# Supabase Database
+SUPABASE_DB_HOST=aws-0-us-east-1.pooler.supabase.com
+SUPABASE_DB_PORT=5432
+SUPABASE_DB_NAME=postgres
+SUPABASE_DB_USER=postgres.nkdequnbswxtzqdoosps
+SUPABASE_DB_PASSWORD=your_password
+SUPABASE_DB_SSLMODE=require
+
+SUPABASE_PROJECT_REF=nkdequnbswxtzqdoosps
+SUPABASE_URL=https://nkdequnbswxtzqdoosps.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
 
 # API Keys
 DASHSCOPE_API_KEY=your_api_key
