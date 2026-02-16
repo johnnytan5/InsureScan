@@ -194,16 +194,9 @@ uv run uvicorn api.main:app --host 0.0.0.0 --port 8000
 See [SUPABASE_MIGRATION.md](./SUPABASE_MIGRATION.md) for detailed setup instructions.
 
 ```env
-# Supabase Database
-SUPABASE_DB_HOST=aws-0-us-east-1.pooler.supabase.com
-SUPABASE_DB_PORT=5432
-SUPABASE_DB_NAME=postgres
-SUPABASE_DB_USER=postgres.nkdequnbswxtzqdoosps
-SUPABASE_DB_PASSWORD=your_password
-SUPABASE_DB_SSLMODE=require
 
-SUPABASE_PROJECT_REF=nkdequnbswxtzqdoosps
-SUPABASE_URL=https://nkdequnbswxtzqdoosps.supabase.co
+SUPABASE_PROJECT_REF=
+SUPABASE_URL=
 SUPABASE_ANON_KEY=your_anon_key
 
 # API Keys
