@@ -7,7 +7,7 @@ class ApiClient {
       process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
   }
 
-  private async request<T = any>(
+  private async request<T = unknown>(
     endpoint: string,
     options: RequestInit = {},
   ): Promise<T> {
@@ -55,7 +55,7 @@ class ApiClient {
     return this.request(`/api/claims/${id}`);
   }
 
-  async updateClaim(id: string, data: any) {
+  async updateClaim(id: string, data: Partial<{ name: string; status: string; claim_score: number }>) {
     return this.request(`/api/claims/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

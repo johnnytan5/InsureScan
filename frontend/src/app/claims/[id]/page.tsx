@@ -1,25 +1,24 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Footer } from "@/components/ui/footer"
+import { Navbar } from "@/components/ui/navbar"
+import type { Claim, Document, Image, Video } from "@/lib/supabase-types"
+import { formatDate, getSeverityColor, getStatusColor } from "@/lib/utils"
+import {
+    AlertCircle,
+    ArrowLeft,
+    CheckCircle,
+    Clock,
+    FileText,
+    Search,
+    ThumbsDown,
+    ThumbsUp,
+    VideoIcon,
+    XCircle,
+} from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { Navbar } from "@/components/ui/navbar"
-import { Footer } from "@/components/ui/footer"
-import { supabaseClient } from "@/lib/supabaseClient"
-import type { Claim, Document, Image, Video } from "@/lib/supabase-types"
-import { formatDate, getStatusColor, getSeverityColor } from "@/lib/utils"
-import {
-  ArrowLeft,
-  FileText,
-  VideoIcon,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Clock,
-  Search,
-  ThumbsUp,
-  ThumbsDown,
-} from "lucide-react"
+import { useEffect, useState } from "react"
 
 export default function ClaimDetailPage() {
   const params = useParams()
@@ -167,7 +166,7 @@ export default function ClaimDetailPage() {
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold mb-4">Claim Not Found</h2>
             <p className="text-gray-500 mb-6">
-              The claim you're looking for doesn't exist or you don't have permission to view it.
+              The claim you&apos;re looking for doesn&apos;t exist or you don&apos;t have permission to view it.
             </p>
             <Link href="/claims">
               <button className="btn btn-primary">Back to Claims</button>

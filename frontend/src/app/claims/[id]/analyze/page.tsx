@@ -1,35 +1,34 @@
 "use client"
 
-import { useEffect, useState, Suspense, useRef } from "react"
+import { Footer } from "@/components/ui/footer"
+import { Navbar } from "@/components/ui/navbar"
+import type { Claim, Document, Image } from "@/lib/supabase-types"
+import { formatDate, getStatusColor } from "@/lib/utils"
+import { OrbitControls, PresentationControls, Stage, useGLTF } from "@react-three/drei"
+import { Canvas } from "@react-three/fiber"
+import {
+    AlertCircle,
+    ArrowLeft,
+    BarChart,
+    Car,
+    CheckCircle,
+    CheckSquare,
+    ChevronDown,
+    ChevronUp,
+    FileCheck,
+    FileText,
+    ImageIcon,
+    Info,
+    Layers,
+    Lightbulb,
+    Loader2,
+    ThumbsDown,
+    ThumbsUp,
+} from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { Canvas } from "@react-three/fiber"
-import { useGLTF, Stage, PresentationControls, OrbitControls } from "@react-three/drei"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { OrbitControls as ThreeOrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
-import type { PrimitiveProps } from "@react-three/fiber"
-import { Navbar } from "@/components/ui/navbar"
-import { Footer } from "@/components/ui/footer"
-import type { Claim, Document, Image, Video } from "@/lib/supabase-types"
-import { formatDate, getStatusColor } from "@/lib/utils"
-import {
-  ArrowLeft,
-  FileText,
-  ImageIcon,
-  CheckCircle,
-  AlertCircle,
-  ThumbsUp,
-  ThumbsDown,
-  BarChart,
-  FileCheck,
-  Lightbulb,
-  Layers,
-  Car,
-  CheckSquare,
-  Info,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-} from "lucide-react"
 
 import * as THREE from "three"
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js"
@@ -134,9 +133,9 @@ const DamageAnalysis = () => {
   return <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
 }
 
-function Model(props: PrimitiveProps) {
+function Model() {
   const { scene } = useGLTF("/damaged.glb")
-  return <primitive object={scene} {...props} />
+  return <primitive object={scene} />
 }
 
 export default function ClaimAnalyzePage() {
@@ -147,23 +146,20 @@ export default function ClaimAnalyzePage() {
   const [claim, setClaim] = useState<Claim | null>(null)
   const [documents, setDocuments] = useState<Document[]>([])
   const [images, setImages] = useState<Image[]>([])
-  const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateMessage, setUpdateMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [activeSection, setActiveSection] = useState("summary")
   const [analysisInProgress, setAnalysisInProgress] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
-  const [detectedModel, setDetectedModel] = useState<string | null>(null)
-  const [confidence, setConfidence] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // setDetectedModel, setConfidence, setError removed as they were unused and caused ESLint errors
 
   // LLM processing states
   const [llmLoading, setLlmLoading] = useState(false)
   const [llmError, setLlmError] = useState<string | null>(null)
-  const [grantData, setGrantData] = useState<any>(null)
-  const [policyData, setPolicyData] = useState<any>(null)
-  const [policeData, setPoliceData] = useState<any>(null)
+  const [grantData, setGrantData] = useState<unknown>(null)
+  const [policyData, setPolicyData] = useState<unknown>(null)
+  const [policeData, setPoliceData] = useState<unknown>(null)
   const [documentVerificationComplete, setDocumentVerificationComplete] = useState(false)
 
   // Expanded sections state
@@ -271,8 +267,8 @@ export default function ClaimAnalyzePage() {
       }
 
       return data.result
-    } catch (err: any) {
-      setLlmError(err.message)
+    } catch (err: unknown) {
+      setLlmError(err instanceof Error ? err.message : String(err))
       console.error("LLM Query Error:", err)
       return null
     }
@@ -289,7 +285,7 @@ export default function ClaimAnalyzePage() {
     try {
       // First try direct parsing in case it's already valid JSON
       return JSON.parse(text)
-    } catch (e) {
+    } catch {
       // If direct parsing fails, try to extract JSON from markdown code blocks
       try {
         // Remove markdown code block syntax if present
@@ -318,7 +314,7 @@ export default function ClaimAnalyzePage() {
 
     try {
       // Use type assertion to access properties that might not be in the Claim type
-      const claimData = claim as any
+      const claimData = claim as Record<string, string | number | boolean | null>
 
       // Process car grant
       if (claimData.text_grant) {
@@ -369,21 +365,25 @@ export default function ClaimAnalyzePage() {
   // Update analysis data with LLM results
   function updateAnalysisDataWithLlmResults() {
     console.log("Analysis data is being documented!")
-    // if (!grantData || !policyData || !policeData) return
+    if (!grantData || !policyData || !policeData) return
+
+    const gData = grantData as Record<string, Record<string, string>>
+    const polData = policyData as Record<string, Record<string, string>>
+    const repData = policeData as Record<string, Record<string, string>>
 
     // Extract data from LLM results
-    const carModelGrant = grantData.grant.car_model || ""
+    const carModelGrant = gData.grant?.car_model || ""
     console.log("Printed grant!")
-    const carModelPolicy = policyData.policy?.car_model || ""
-    const carModelPolice = policeData.report?.car_model || ""
+    const carModelPolicy = polData.policy?.car_model || ""
+    const carModelPolice = repData.report?.car_model || ""
 
-    const ownerNameGrant = grantData.grant?.owner_name || ""
-    const ownerNamePolicy = policyData.policy?.owner_name || ""
-    const ownerNamePolice = policeData.report?.owner_name || ""
+    const ownerNameGrant = gData.grant?.owner_name || ""
+    const ownerNamePolicy = polData.policy?.owner_name || ""
+    const ownerNamePolice = repData.report?.owner_name || ""
 
-    const policyDate = policyData.policy?.coverage_date || ""
-    const incidentDatePolicy = policyData.policy?.incident_date || ""
-    const incidentDatePolice = policeData.report?.incident_date || ""
+    const policyDate = polData.policy?.coverage_date || ""
+    const incidentDatePolicy = polData.policy?.incident_date || ""
+    const incidentDatePolice = repData.report?.incident_date || ""
 
     // Check if car models match
     const carModelMatch = carModelGrant === carModelPolicy && carModelPolicy === carModelPolice
@@ -472,8 +472,8 @@ export default function ClaimAnalyzePage() {
         if (!videosResponse.ok) {
           throw new Error(`Failed to fetch videos: ${videosResponse.statusText}`)
         }
-        const videosData = await videosResponse.json()
-        setVideos(videosData || [])
+        // const videosData = await videosResponse.json()
+        // setVideos removed as it was unused and caused ESLint error
       } catch (error) {
         console.error("Error fetching claim data:", error)
       } finally {
@@ -616,29 +616,6 @@ export default function ClaimAnalyzePage() {
     })
   }
 
-  const runCarModelIdentification = async (imageUrl: string) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/predict_car_model/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_url: imageUrl }),
-      })
-
-      if (!response.ok) throw new Error("Failed to fetch model prediction")
-
-      const data = await response.json()
-      setDetectedModel(data.car_model)
-      setConfidence(data.confidence)
-    } catch (err: any) {
-      setError(err.message || "Something went wrong")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -662,7 +639,7 @@ export default function ClaimAnalyzePage() {
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold mb-4">Claim Not Found</h2>
             <p className="text-gray-500 mb-6">
-              The claim you're looking for doesn't exist or you don't have permission to view it.
+              The claim you&apos;re looking for doesn&apos;t exist or you don&apos;t have permission to view it.
             </p>
             <Link href="/claims">
               <button className="btn btn-primary">Back to Claims</button>
@@ -877,7 +854,7 @@ export default function ClaimAnalyzePage() {
                               azimuth={[-Math.PI / 4, Math.PI / 4]}
                             >
                               <Stage environment="night" intensity={0.2}>
-                                <Model scale={0.01} />
+                                <Model />
                               </Stage>
                             </PresentationControls>
                             <OrbitControls
@@ -1097,27 +1074,23 @@ export default function ClaimAnalyzePage() {
                               </div>
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Detected Model</p>
-                                {loading ? (
-                                  <p className="text-sm text-gray-600 italic">Analyzing...</p>
-                                ) : error ? (
-                                  <p className="text-sm text-red-500">{error}</p>
-                                ) : detectedModel ? (
-                                  <p className="font-bold text-lg">{detectedModel}</p>
-                                ) : (
-                                  <p className="text-sm text-gray-400">Not available</p>
-                                )}
+                                  {loading ? (
+                                    <p className="text-sm text-gray-600 italic">Analyzing...</p>
+                                  ) : analysisData.carModelIdentification.detectedModel ? (
+                                    <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
+                                  ) : (
+                                    <p className="text-sm text-gray-400">Not available</p>
+                                  )}
                               </div>
                               <div>
                                 <p className="text-sm text-gray-500 mb-1">Confidence</p>
-                                {loading ? (
-                                  <p className="text-sm text-gray-600 italic">Processing...</p>
-                                ) : error ? (
-                                  <p className="text-sm text-red-500">-</p>
-                                ) : confidence !== null ? (
-                                  <p className="font-bold text-lg">{(confidence * 100).toFixed(1)}%</p>
-                                ) : (
-                                  <p className="text-sm text-gray-400">Not available</p>
-                                )}
+                                  {loading ? (
+                                    <p className="text-sm text-gray-600 italic">Processing...</p>
+                                  ) : analysisData.carModelIdentification.confidence !== null ? (
+                                    <p className="font-bold text-lg">{(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%</p>
+                                  ) : (
+                                    <p className="text-sm text-gray-400">Not available</p>
+                                  )}
                               </div>
 
                               <div>
@@ -1618,10 +1591,8 @@ export default function ClaimAnalyzePage() {
                           <p className="text-sm text-gray-500 mb-1">Detected Model</p>
                           {loading ? (
                             <p className="text-sm text-gray-600 italic">Analyzing...</p>
-                          ) : error ? (
-                            <p className="text-sm text-red-500">{error}</p>
-                          ) : detectedModel ? (
-                            <p className="font-bold text-lg">{detectedModel}</p>
+                          ) : analysisData.carModelIdentification.detectedModel ? (
+                            <p className="font-bold text-lg">{analysisData.carModelIdentification.detectedModel}</p>
                           ) : (
                             <p className="text-sm text-gray-400">Not available</p>
                           )}
@@ -1630,10 +1601,8 @@ export default function ClaimAnalyzePage() {
                           <p className="text-sm text-gray-500 mb-1">Confidence</p>
                           {loading ? (
                             <p className="text-sm text-gray-600 italic">Processing...</p>
-                          ) : error ? (
-                            <p className="text-sm text-red-500">-</p>
-                          ) : confidence !== null ? (
-                            <p className="font-bold text-lg">{(confidence * 100).toFixed(1)}%</p>
+                          ) : analysisData.carModelIdentification.confidence !== null ? (
+                            <p className="font-bold text-lg">{(analysisData.carModelIdentification.confidence * 100).toFixed(1)}%</p>
                           ) : (
                             <p className="text-sm text-gray-400">Not available</p>
                           )}

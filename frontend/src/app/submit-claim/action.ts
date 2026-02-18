@@ -87,7 +87,7 @@ export async function triggerDocumentProcessing(
     console.error("Error triggering document processing:", error);
 
     // Handling specific error types for better feedback
-    if (error instanceof Error && (error as any).name === 'AbortError') {
+    if (error instanceof Error && error.name === 'AbortError') {
       return { success: false, error: "Request timed out" };
     }
 

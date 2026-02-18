@@ -1,13 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { Download, Filter, Plus } from "lucide-react"
-import { Navbar } from "@/components/ui/navbar"
 import { Footer } from "@/components/ui/footer"
-import { supabaseClient } from "@/lib/supabaseClient"
+import { Navbar } from "@/components/ui/navbar"
 import type { Claim } from "@/lib/supabase-types"
 import { formatDate, getStatusColor } from "@/lib/utils"
+import { Download, Filter, Plus } from "lucide-react"
+import Link from "next/link"
+import { useEffect, useState } from "react"
 
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<Claim[]>([])
